@@ -547,6 +547,8 @@ hr.div {
   margin: 0 0 8px;
 }
 
+.res-link { color: var(--accent-2); word-break: break-all; }
+
 .res-note {
   font-size: 13px;
   line-height: 1.5;

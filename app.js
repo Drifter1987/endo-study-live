@@ -736,7 +736,7 @@
       '<button class="chip' + (ui.dueOnly ? " on" : "") + '" data-action="toggle-due">Only due now (' + dueAll + ')</button>' +
       '</div>';
 
-    html += '<p class="muted small" style="margin:14px 0 0">New today: ' + newDoneToday() + ' of ' +
+    html += '<p class="muted small" style="margin:14px 0 0">New today: ' + newDoneToday() + ' used of ' +
       (state.settings.dailyNew || 0) + ' allowed · ' + fresh + ' never seen</p>' +
       '<div class="chips" style="margin-top:8px">' +
       '<button class="chip' + (ui.ignoreLimit ? " on" : "") + '" data-action="toggle-limit">Ignore daily cap</button>' +
@@ -1109,6 +1109,7 @@
     html += '<div class="chips" style="margin-bottom:12px">' +
       '<button class="chip' + (ui.bankSection === "all" ? " on" : "") + '" data-action="bank-section" data-section="all">All sections</button>' +
       SECTIONS.map(function (s) {
+        if (!state.questions.some(function (q) { return q.section === s.id; })) return "";
         return '<button class="chip' + (ui.bankSection === s.id ? " on" : "") + '" data-action="bank-section" data-section="' + s.id + '">' +
           esc(s.name) + '</button>';
       }).join("") +
@@ -1303,6 +1304,10 @@
     return window.LEARN_RESOURCES || [];
   }
 
+  function linkHost(url) {
+    return String(url || "").replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+  }
+
   function learnDoneCount() {
     const done = (state.learn && state.learn.done) || {};
     return learnItems().filter(function (r) { return !!done[r.id]; }).length;
@@ -1315,7 +1320,8 @@
   }
 
   function sessionSizeLabel() {
-    return ui.size === 0 ? "all due" : ui.size + " questions";
+    if (ui.size === 0) return "everything due";
+    return ui.dueOnly ? "up to " + ui.size + " questions" : ui.size + " questions";
   }
 
   function esapLoadedCount() {
@@ -1386,7 +1392,7 @@
         '<span class="cost ' + esc(r.cost) + '">' + esc(costLabel) + '</span>' +
         '</div>' +
         '<h3 class="res-title">' + esc(r.title) + '</h3>' +
-        '<p class="res-org">' + esc(r.org) + '</p>' +
+        '<p class="res-org">' + esc(r.org) + (r.url ? ' · <span class="res-link">' + esc(linkHost(r.url)) + '</span>' : '') + '</p>' +
         (r.about ? '<p class="res-about"><b>What it is:</b> ' + esc(r.about) + '</p>' : '') +
         '<details class="fold" style="margin:0 0 10px"><summary>What to read</summary>' +
         '<p class="res-read">' + esc(r.read) + '</p>' +

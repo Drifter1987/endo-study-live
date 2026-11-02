@@ -8,6 +8,7 @@
 window.LEARN_RESOURCES = [
   {
     id: "ada-standards",
+    url: "https://professional.diabetes.org/standards-of-care",
     sections: ["diabetes", "lipids"],
     title: "Standards of Care in Diabetes 2026",
     org: "American Diabetes Association",
@@ -19,6 +20,7 @@ window.LEARN_RESOURCES = [
   },
   {
     id: "ata",
+    url: "https://www.thyroid.org/professionals/ata-professional-guidelines/",
     sections: ["thyroid"],
     title: "ATA Guidelines & Statements",
     org: "American Thyroid Association",
@@ -30,6 +32,7 @@ window.LEARN_RESOURCES = [
   },
   {
     id: "endotext",
+    url: "https://www.endotext.org/",
     sections: ["bone", "adrenal", "pituitary", "female", "male"],
     title: "Endotext — free endocrinology textbook",
     org: "MDText.com",
@@ -41,6 +44,7 @@ window.LEARN_RESOURCES = [
   },
   {
     id: "ese-directory",
+    url: "https://www.ese-hormones.org/publications/directory/?Publication+Type=Guidelines",
     sections: ["adrenal", "pituitary", "female", "male", "bone"],
     title: "ESE guideline directory (full list)",
     org: "European Society of Endocrinology",
@@ -52,6 +56,7 @@ window.LEARN_RESOURCES = [
   },
   {
     id: "aace",
+    url: "https://pro.aace.com/clinical-guidance",
     sections: ["lipids", "diabetes", "bone", "adrenal"],
     title: "AACE guidelines and algorithms",
     org: "American Association of Clinical Endocrinology",
@@ -63,6 +68,7 @@ window.LEARN_RESOURCES = [
   },
   {
     id: "es-recordings",
+    url: "https://education.endocrine.org/Public/Catalog/Details.aspx?id=bSSSXzagnXjcUsv2Y47VHg==",
     sections: ["adrenal", "pituitary", "bone", "female", "male", "diabetes", "thyroid"],
     title: "Clinical Practice Guidelines — free session library",
     org: "Endocrine Society (Center for Learning)",
@@ -74,6 +80,7 @@ window.LEARN_RESOURCES = [
   },
   {
     id: "ztof",
+    url: "https://zerotofinals.com/medicine/endocrinology/",
     sections: ["thyroid", "adrenal", "pituitary", "diabetes", "bone"],
     title: "Endocrinology notes (first pass)",
     org: "Zero To Finals",
@@ -85,6 +92,7 @@ window.LEARN_RESOURCES = [
   },
   {
     id: "jcemcr",
+    url: "https://academic.oup.com/jcemcr",
     sections: ["adrenal", "pituitary", "thyroid", "bone", "female", "male", "diabetes", "lipids"],
     title: "JCEM Case Reports",
     org: "Endocrine Society / Oxford Academic",
@@ -96,6 +104,7 @@ window.LEARN_RESOURCES = [
   },
   {
     id: "geeky-quiz",
+    url: "https://geekymedics.com/endocrinology-quiz/",
     sections: ["pituitary", "adrenal", "diabetes", "thyroid"],
     title: "Endocrinology quiz (23 questions)",
     org: "Geeky Medics",
@@ -107,6 +116,7 @@ window.LEARN_RESOURCES = [
   },
   {
     id: "ebr",
+    url: "https://education.endocrine.org/Public/Catalog/ChefView.aspx",
     sections: ["diabetes", "thyroid", "bone", "lipids", "adrenal", "pituitary", "female", "male"],
     title: "Endocrine Board Review 2026 (second question bank, paid)",
     org: "Endocrine Society (Center for Learning)",

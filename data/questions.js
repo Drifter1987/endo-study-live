@@ -4,8 +4,8 @@
  * These are ORIGINAL practice items written to demonstrate the app and to
  * exercise every blueprint section. They are NOT ESAP questions.
  *
- * Add your own ESAP/ITE questions with the "Add" form or the bulk importer
- * (More -> Import). See README.md for the paste format.
+ * Add your own questions with the "New" button on the Questions tab. See
+ * README.md for the rest.
  *
  * Each item: { section, vignette, options[], answer, why, ref }
  * Use \n inside vignette / why for line breaks (lab blocks, bullets).
