@@ -709,3 +709,31 @@ details.fold.card { background: var(--card); padding: 0 14px; }
   padding: 3px 9px;
   white-space: nowrap;
 }
+
+
+/* ---------- polish pass: roomier taps, calmer hierarchy ---------- */
+.card { box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16); }
+
+.btn { min-height: 46px; }
+.btn.ghost { min-height: 44px; }
+.chip { min-height: 34px; display: inline-flex; align-items: center; }
+.option { min-height: 48px; }
+.list-row { min-height: 52px; }
+
+details.fold > summary { min-height: 46px; }
+details.fold[open] > summary { margin-bottom: 14px; }
+
+.row.between { gap: 10px; }
+.row.between h3 { min-width: 0; }
+
+.tabbar .tab.active .ico {
+  color: var(--accent);
+  text-shadow: 0 0 12px rgba(79, 209, 197, 0.7);
+}
+
+.stat b { letter-spacing: 0.2px; }
+
+.vignette { font-size: 15.5px; }
+
+.sync-line { letter-spacing: 0.2px; }
+.code-box { line-height: 1.5; }

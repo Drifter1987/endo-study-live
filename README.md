@@ -32,23 +32,21 @@ on Today and in **More → How this app works** opens it.
 
 ## One live copy for everyone
 
-The app keeps working with no connection, but it can also be **one shared board**: whoever opens
-the link reads the last saved progress, and whatever they answer is written back within a few
-seconds.
+The app works with no connection, and it can also be **one shared board**: whoever opens the
+link reads the last saved progress, and whatever they answer is written back within a few
+seconds. There is no account and no key.
 
-Turn it on once: **More → Shared live copy → Turn on the shared copy**. It needs a free JSONBin
-key (the app creates the copy itself), then it shows a **link to share** — that link carries the
-workspace, so anyone opening it joins the same progress. The same workspace can be baked into the
-app for everybody by filling `LIVE_STORE` at the top of `app.js` with the bin id and key; after
-that the bare site URL is the live one.
+Tap **More → Shared live copy → Start the shared copy** once. The app creates the board and puts
+its id in the address bar, so the URL you are on becomes the link to send. Paste that id into
+`LIVE_STORE` at the top of `app.js` to make the bare site URL the shared board for everybody.
 
 - **Last edit wins, per question** — a save overwrites the shared copy, but progress is merged so
   a count is never lost: the phone that took a card further owns its schedule, attempts and
   correct answers take the higher count, flags and reading ticks are combined.
 - **Automatic** — it pulls when the app opens and whenever it comes back to the foreground, and
-  pushes a few seconds after every change.
+  pushes a couple of seconds after every change.
 - **Offline-safe** — no connection only means it retries; the app keeps working and saves locally.
-- **This device only** turns sharing off on one device without touching the shared copy.
+- **This device only** stops sharing on one device without touching the board.
 
 ## The question bank
 

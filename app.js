@@ -160,9 +160,8 @@
   /* ---------------- state ---------------- */
   function defaultSync() {
     return {
-      provider: "",
-      key: "",
-      binId: "",
+      blobId: "",
+      off: false,
       deviceId: "d-" + Math.random().toString(36).slice(2, 10),
       lastSyncAt: 0,
       lastError: ""
@@ -520,10 +519,7 @@
     bankFilter: "all",
     bankSection: "all",
     session: null,
-    clock: null,
-    syncPanel: "",
-    syncKey: "",
-    syncCode: ""
+    clock: null
   };
 
   let toastTimer = null;
@@ -2106,22 +2102,12 @@
     }
 
     /* --- sync --- */
-    if (action === "sync-panel") {
-      ui.syncPanel = el.dataset.panel || "";
-      render();
-      window.scrollTo({ top: 0 });
+    if (action === "sync-start") {
+      startWorkspace();
       return;
     }
     if (action === "sync-now") {
       syncNow("manual");
-      return;
-    }
-    if (action === "sync-create") {
-      syncCreate();
-      return;
-    }
-    if (action === "sync-join") {
-      syncJoin();
       return;
     }
     if (action === "sync-copy") {
@@ -2129,17 +2115,15 @@
       return;
     }
     if (action === "sync-off") {
-      if (!window.confirm("Turn sync off on this phone? The cloud copy is kept and you can join it again with your code.")) return;
+      if (!window.confirm("Stop sharing on this device? The shared copy stays online and you can join it again with the link.")) return;
       const s = syncSettings();
-      s.provider = "off";
-      s.key = "";
-      s.binId = "";
+      s.off = true;
+      s.blobId = "";
       s.lastError = "";
       s.lastSyncAt = 0;
-      ui.syncPanel = "";
       persist();
       render();
-      toast("Sync off on this phone");
+      toast("This device is on its own now");
       return;
     }
 
@@ -2250,16 +2234,6 @@
           again.setSelectionRange(pos, pos);
         } catch (err) { /* ignore */ }
       }
-      return;
-    }
-    /* the sync fields are held here rather than re-rendering, so typing
-       never loses the caret */
-    if (t.id === "sync-key") {
-      ui.syncKey = t.value;
-      return;
-    }
-    if (t.id === "sync-code-input") {
-      ui.syncCode = t.value;
     }
   }
 
@@ -2284,14 +2258,14 @@
      that code. From then on each phone pulls when it opens, pushes a few seconds
      after a change, and merges rather than overwrites. */
 
-  const SYNC_BIN = "https://api.jsonbin.io/v3/b";
+  const SYNC_BASE = "https://jsonblob.com/api/jsonBlob";
   const SYNC_TIMEOUT = 12000;
-  const SYNC_DEBOUNCE = 4000;
+  const SYNC_DEBOUNCE = 2500;
 
-  /* The one workspace everybody who opens the site shares. Put the bin id and
-     master key of a JSONBin bin here and the deployed URL itself becomes live:
-     any visitor reads the last edits and their own answers are written back. */
-  const LIVE_STORE = { key: "", binId: "" };
+  /* The board everybody shares. Leave empty and the first person to start it
+     gets an id that the app writes into the address, so the link becomes the
+     board. Paste an id here to make the bare site URL the board for everybody. */
+  const LIVE_STORE = { blobId: "" };
 
   let syncBusy = false;
   let syncQueued = false;
@@ -2300,27 +2274,40 @@
 
   function syncSettings() {
     if (!state.sync) state.sync = defaultSync();
-    const s = state.sync;
+    return state.sync;
+  }
 
-    /* a workspace baked into the app wins over nothing, but never over a
-       deliberate opt-out on this device */
-    if (s.provider !== "off" && !s.key && !s.binId && LIVE_STORE.key && LIVE_STORE.binId) {
-      s.provider = "jsonbin";
-      s.key = LIVE_STORE.key;
-      s.binId = LIVE_STORE.binId;
-    }
-    return s;
+  function workspaceId() {
+    const s = syncSettings();
+    if (s.off) return "";
+    return s.blobId || LIVE_STORE.blobId || "";
   }
 
   function syncReady() {
-    const s = syncSettings();
-    if (s.provider === "off") return false;
-    return !!(s.key && s.binId);
+    return !!workspaceId();
+  }
+
+  function workspaceUrl() {
+    return SYNC_BASE + "/" + encodeURIComponent(workspaceId());
   }
 
   function shareLink() {
     const base = window.location.origin + window.location.pathname;
-    return base + "?code=" + encodeURIComponent(encodeSyncCode());
+    return base + "?w=" + encodeURIComponent(workspaceId());
+  }
+
+  /* Remembers the board on this device and puts it in the address bar, so the
+     URL itself is the thing to send. */
+  function rememberWorkspace(id) {
+    if (!id) return;
+    const s = syncSettings();
+    s.blobId = String(id);
+    s.off = false;
+    persist();
+    try {
+      const url = window.location.pathname + "?w=" + encodeURIComponent(s.blobId);
+      window.history.replaceState(null, "", url);
+    } catch (e) { /* some webviews refuse; the id is still saved */ }
   }
 
   function isOnline() {
@@ -2413,19 +2400,15 @@
   }
 
   async function syncReadRemote() {
-    const s = syncSettings();
     if (!syncReady()) return null;
-    const body = await httpJson(SYNC_BIN + "/" + encodeURIComponent(s.binId) + "/latest", {
-      headers: { "X-Master-Key": s.key }
-    });
-    return body && body.record ? body.record : null;
+    return await httpJson(workspaceUrl());
   }
 
   async function syncWriteRemote(doc) {
-    const s = syncSettings();
-    await httpJson(SYNC_BIN + "/" + encodeURIComponent(s.binId), {
+    if (!syncReady()) throw new Error("no shared copy yet");
+    await httpJson(workspaceUrl(), {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "X-Master-Key": s.key },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(doc)
     });
   }
@@ -2664,102 +2647,55 @@
     }
   }
 
-  async function syncCreate() {
-    const keyEl = document.getElementById("sync-key");
-    const key = keyEl ? keyEl.value.trim() : "";
-
-    if (!key) {
-      toast("Paste your JSONBin master key first");
-      return;
-    }
-
+  /* Starts the shared board in one tap: no account, no key to paste. */
+  async function startWorkspace() {
     if (syncBusy) return;
     syncBusy = true;
     refreshSyncUI();
 
+    let id = "";
+
     try {
-      const body = await httpJson(SYNC_BIN, {
+      const res = await fetch(SYNC_BASE, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Master-Key": key,
-          "X-Bin-Name": "endo-study",
-          "X-Bin-Private": "true"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildSyncDoc())
       });
 
-      const id = body && body.metadata && body.metadata.id;
-      if (!id) throw new Error("the service did not return a bin id");
+      if (!res.ok) throw new Error("HTTP " + res.status);
 
-      const s = syncSettings();
-      s.provider = "jsonbin";
-      s.key = key;
-      s.binId = String(id);
-      s.lastError = "";
-      s.lastSyncAt = Date.now();
+      const loc = res.headers.get("Location") || "";
+      const m = /\/([A-Za-z0-9-]+)\s*$/.exec(loc);
+      if (m) id = m[1];
 
-      ui.syncPanel = "code";
-      ui.syncKey = "";
-      persist();
-      render();
-      toast("Sync is on");
+      if (!id) {
+        const text = await res.text();
+        let body = null;
+        try { body = text ? JSON.parse(text) : null; } catch (e) { body = null; }
+        if (body && body.id) id = String(body.id);
+      }
+
+      if (!id) throw new Error("the shared copy was not created");
     } catch (err) {
       const s = syncSettings();
       s.lastError = String(err && err.message ? err.message : err);
-      toast("Could not create sync: " + s.lastError);
-      refreshSyncUI();
-    } finally {
+      toast("Could not start the shared copy: " + s.lastError);
       syncBusy = false;
       refreshSyncUI();
-    }
-  }
-
-  async function syncJoin() {
-    const parsed = decodeSyncCode(ui.syncCode || "");
-    if (!parsed) {
-      toast("That code doesn't look right");
       return;
     }
 
+    syncBusy = false;
+    rememberWorkspace(id);
+
     const s = syncSettings();
-    s.provider = "jsonbin";
-    s.key = parsed.key;
-    s.binId = parsed.binId;
     s.lastError = "";
+    s.lastSyncAt = Date.now();
     persist();
 
-    const ok = await syncNow("manual");
-    if (ok) {
-      ui.syncPanel = "";
-      ui.syncCode = "";
-      render();
-      toast("Sync is on");
-    }
-  }
-
-  function encodeSyncCode() {
-    const s = syncSettings();
-    const raw = s.key + "|" + s.binId;
-    try {
-      return btoa(raw);
-    } catch (e) {
-      return raw;
-    }
-  }
-
-  function decodeSyncCode(code) {
-    let text = String(code || "").trim();
-    if (!text) return null;
-    if (text.indexOf("|") === -1) {
-      try { text = atob(text); } catch (e) { return null; }
-    }
-    const i = text.indexOf("|");
-    if (i < 1) return null;
-    const key = text.slice(0, i).trim();
-    const binId = text.slice(i + 1).trim();
-    if (!key || !binId) return null;
-    return { key: key, binId: binId };
+    await syncNow("start");
+    render();
+    toast("Shared copy is on");
   }
 
   async function copyText(text) {
@@ -2781,58 +2717,29 @@
   function renderSyncCard() {
     const s = syncSettings();
     const on = syncReady();
-    const panel = ui.syncPanel || "";
-    const cls = syncStateClass();
 
-    let html = '<details class="fold card"' + (panel ? " open" : "") + '>' +
-      '<summary>Shared live copy <span class="sync-line ' + cls + '" id="sync-summary">' +
-      esc(syncLabel()) + '</span></summary>';
+    let html = '<section class="card">' +
+      '<div class="row between"><h3 style="margin:0">Shared live copy</h3>' +
+      '<span class="sync-line ' + syncStateClass() + '" id="sync-line">' +
+      esc(on ? syncLabel() : "Off") + '</span></div>';
 
     if (on) {
-      html += '<p class="muted small" style="margin:0 0 10px">Everyone who opens the shared link studies from the same questions, schedule and reading list, and the last answer saved wins. What you do here reaches the shared copy a few seconds later.</p>' +
-        '<div class="kv"><span>Status</span><span class="sync-line ' + cls + '" id="sync-line">' +
-        esc(syncLabel()) + '</span></div>' +
+      html += '<p class="muted small" style="margin:8px 0 10px">Everyone who opens the link below studies from the same progress. What you answer here reaches it within a few seconds.</p>' +
+        '<textarea class="input ta-sm code-box" id="sync-code-box" readonly>' + esc(shareLink()) + '</textarea>' +
         '<p class="sync-err" id="sync-error"' + (s.lastError ? "" : " hidden") + '>' +
         esc(s.lastError || "") + '</p>' +
-        '<div class="stack" style="margin-top:10px">' +
-        '<button class="btn wide" data-action="sync-panel" data-panel="code">Copy the link to share</button>' +
-        '<button class="btn ghost wide" data-action="sync-now">Sync now</button>' +
-        '<button class="btn ghost wide danger" data-action="sync-off">Use this device only</button>' +
-        '</div>';
-    }
-
-    if (panel === "code") {
-      html += '<p class="muted small" style="margin:12px 0 8px">Send this link. Anyone who opens it joins the same live copy — their answers replace what is here as they save, so share it only with people you are studying with.</p>' +
-        '<textarea class="input ta-sm code-box" id="sync-code-box" readonly>' + esc(shareLink()) + '</textarea>' +
         '<div class="stack" style="margin-top:8px">' +
         '<button class="btn wide" data-action="sync-copy">Copy the link</button>' +
-        '</div>';
+        '<div class="row" style="gap:8px">' +
+        '<button class="btn ghost grow" data-action="sync-now">Sync now</button>' +
+        '<button class="btn ghost grow" data-action="sync-off">This device only</button>' +
+        '</div></div>';
+    } else {
+      html += '<p class="muted small" style="margin:8px 0 10px">Turn it on once and everyone you send the link to studies from the same progress — no account, no key to paste.</p>' +
+        '<button class="btn primary wide" data-action="sync-start">Start the shared copy</button>';
     }
 
-    if (panel === "create") {
-      html += '<p class="muted small" style="margin:12px 0 8px">The shared copy lives in <b>JSONBin</b>, which is free. Make an account there, copy the <b>master key</b> from its API keys page, and paste it here. One person does this once and the link works for everyone after that.</p>' +
-        '<label class="field"><span>JSONBin master key</span>' +
-        '<input class="input" id="sync-key" type="text" autocomplete="off" spellcheck="false" value="' +
-        esc(ui.syncKey || "") + '" placeholder="$2a$10$…" /></label>' +
-        '<button class="btn primary wide" data-action="sync-create">Create the shared copy</button>';
-    }
-
-    if (panel === "join") {
-      html += '<p class="muted small" style="margin:12px 0 8px">Paste the sync code shown on the first phone. This phone joins the same copy and keeps it up to date from then on.</p>' +
-        '<label class="field"><span>Sync code</span>' +
-        '<textarea class="input ta-sm code-box" id="sync-code-input">' + esc(ui.syncCode || "") + '</textarea></label>' +
-        '<button class="btn primary wide" data-action="sync-join">Join this sync</button>';
-    }
-
-    if (!on && !panel) {
-      html += '<p class="muted small" style="margin:0 0 10px">Turn on the shared copy and everyone who opens the link studies from the same progress. Set it up once — after that the app syncs by itself whenever it is open.</p>' +
-        '<div class="stack">' +
-        '<button class="btn wide" data-action="sync-panel" data-panel="create">Turn on the shared copy</button>' +
-        '<button class="btn ghost wide" data-action="sync-panel" data-panel="join">Join an existing sync</button>' +
-        '</div>';
-    }
-
-    html += '</details>';
+    html += '</section>';
     return html;
   }
 
@@ -2879,18 +2786,11 @@
       toast("This browser is blocking storage, so progress will not be saved.");
     }
 
-    /* a shared link carries the workspace in its query string */
-    const shared = /[?&]code=([^&]+)/.exec(String(window.location.search || ""));
+    /* a shared link carries the board id in its query string */
+    const shared = /[?&]w=([^&]+)/.exec(String(window.location.search || ""));
     if (shared) {
-      const parsed = decodeSyncCode(decodeURIComponent(shared[1]));
-      if (parsed) {
-        const s = syncSettings();
-        s.provider = "jsonbin";
-        s.key = parsed.key;
-        s.binId = parsed.binId;
-        s.lastError = "";
-        persist();
-      }
+      const id = decodeURIComponent(shared[1]);
+      if (id) rememberWorkspace(id);
     }
 
     render();
