@@ -3,9 +3,8 @@
 Offline study app for the endocrinology in-training exam (ESAP / ITE), built for a phone.
 Target date default: **15 January 2027** (the real window runs mid-January to mid-February).
 
-Open `index.html`. No build step, no internet needed to study; everything is stored in
-the browser's localStorage on this device. Turn on **sync** once in More to keep a second
-phone on the same progress (see below).
+Open `index.html`. No build step and no internet needed — everything is stored in the
+browser's localStorage on this device.
 
 ## The five tabs
 
@@ -20,7 +19,7 @@ phone on the same progress (see below).
   one to read the answer and explanation; flag, edit or delete.
 - **Learn** — the reading list. Each card shows what the source is; the exact sections to read
   are in a **What to read** fold.
-- **More** — exam date and daily limit, mock settings, sync, then collapsed folds for backup, lab
+- **More** — exam date and daily limit, mock settings, then collapsed folds for backup, lab
   reference, bank status, how the app works, and resets.
 
 ## App tour
@@ -30,23 +29,12 @@ Today, the study plan, Study, grading, the timed mock, Questions, Learn, More �
 caption under each screen, a progress bar and chapter buttons for jumping. **Watch the app tour**
 on Today and in **More → How this app works** opens it.
 
-## One live copy for everyone
+## Moving progress between devices
 
-The app works with no connection, and it can also be **one shared board**: whoever opens the
-link reads the last saved progress, and whatever they answer is written back within a few
-seconds. There is no account and no key.
-
-Tap **More → Shared live copy → Start the shared copy** once. The app creates the board and puts
-its id in the address bar, so the URL you are on becomes the link to send. Paste that id into
-`LIVE_STORE` at the top of `app.js` to make the bare site URL the shared board for everybody.
-
-- **Last edit wins, per question** — a save overwrites the shared copy, but progress is merged so
-  a count is never lost: the phone that took a card further owns its schedule, attempts and
-  correct answers take the higher count, flags and reading ticks are combined.
-- **Automatic** — it pulls when the app opens and whenever it comes back to the foreground, and
-  pushes a couple of seconds after every change.
-- **Offline-safe** — no connection only means it retries; the app keeps working and saves locally.
-- **This device only** stops sharing on one device without touching the board.
+There is no account, no server and no third-party service: progress lives on the device.
+**More → Backup and restore → Export all** writes a JSON file, and **Restore from a backup** on
+another phone merges it in. That is how progress travels between devices, and it is the one copy
+that survives a wiped browser.
 
 ## The question bank
 
@@ -131,10 +119,7 @@ so the ITE page and the society's guideline hub are not linked; that material is
 - One timed mock a month, then one a week in December; the ITE gives 4 hours for 90 questions,
   so 2.5 minutes per question is the right pace.
 - **Flag** questions to reread; they appear on Today.
-- **Export** before clearing the browser or wiping the phone. With sync on the cloud copy also
-  survives, but an export is the one thing that survives everything.
-- If a sync ever fails, **More → Sync across devices** shows the service's own message, and
-  **Sync now** retries.
+- **Export** before clearing the browser or wiping the phone — it is the only copy.
 
 ## Files
 

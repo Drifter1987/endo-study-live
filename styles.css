@@ -174,42 +174,6 @@ h3, .h3 {
 
 .tour-link:active { background: rgba(79, 209, 197, 0.16); }
 
-/* ---------- sync ---------- */
-.sync-line { font-size: 12px; font-weight: 600; color: var(--muted); }
-.sync-line.ok { color: var(--ok); }
-.sync-line.busy { color: var(--accent-2); }
-.sync-line.err { color: var(--no); }
-.sync-line.off { color: var(--muted); }
-
-.sync-dot {
-  display: inline-block;
-  width: 7px; height: 7px;
-  margin-left: 5px;
-  border-radius: 50%;
-  background: var(--muted);
-  vertical-align: middle;
-}
-
-.sync-dot.ok { background: var(--ok); box-shadow: 0 0 8px rgba(61, 220, 151, 0.8); }
-.sync-dot.busy { background: var(--accent-2); box-shadow: 0 0 8px rgba(56, 163, 245, 0.8); }
-.sync-dot.err { background: var(--no); box-shadow: 0 0 8px rgba(242, 99, 123, 0.8); }
-
-.sync-err {
-  margin: 8px 0 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--no);
-  word-break: break-word;
-}
-
-.code-box {
-  width: 100%;
-  min-height: 64px;
-  font-family: ui-monospace, Menlo, Courier, monospace;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .chip {
@@ -734,6 +698,3 @@ details.fold[open] > summary { margin-bottom: 14px; }
 .stat b { letter-spacing: 0.2px; }
 
 .vignette { font-size: 15.5px; }
-
-.sync-line { letter-spacing: 0.2px; }
-.code-box { line-height: 1.5; }

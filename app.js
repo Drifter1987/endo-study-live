@@ -158,16 +158,6 @@
   }
 
   /* ---------------- state ---------------- */
-  function defaultSync() {
-    return {
-      blobId: "",
-      off: false,
-      deviceId: "d-" + Math.random().toString(36).slice(2, 10),
-      lastSyncAt: 0,
-      lastError: ""
-    };
-  }
-
   function defaultState() {
     return {
       version: APP_VERSION,
@@ -179,8 +169,7 @@
       totalAnswered: 0,
       deletedBankIds: [],
       learn: { done: {} },
-      meta: { createdAt: Date.now(), settingsAt: 0, lastSavedAt: 0 },
-      sync: defaultSync()
+      meta: { createdAt: Date.now(), lastSavedAt: 0 }
     };
   }
 
@@ -287,9 +276,8 @@
     if (!s.days || typeof s.days !== "object") s.days = {};
     s.totalAnswered = s.totalAnswered || 0;
 
-    /* v1 -> v2: per-state metadata and the sync block */
-    s.meta = Object.assign({ createdAt: Date.now(), settingsAt: 0, lastSavedAt: 0 }, s.meta || {});
-    s.sync = Object.assign(defaultSync(), s.sync || {});
+    /* v1 -> v2: a metadata block for timestamps */
+    s.meta = Object.assign({ createdAt: Date.now(), lastSavedAt: 0 }, s.meta || {});
     s.version = APP_VERSION;
 
     if (!s.seeded) {
@@ -337,11 +325,10 @@
     }
   }
 
-  /* Every change the user makes goes through save(): write locally, then queue
-     a push if sync is on. */
+  /* Every change the user makes goes through save(), which writes to this
+     device. */
   function save() {
     persist();
-    scheduleSync();
   }
 
   function storageOk() {
@@ -550,7 +537,7 @@
     else if (d === 0) line = "exam day";
     else line = "exam date passed";
 
-    meta.innerHTML = esc(line) + '<span class="sync-dot" id="sync-dot" hidden></span>';
+    meta.textContent = line;
   }
 
   function render() {
@@ -573,7 +560,6 @@
 
     renderChrome();
     syncClock();
-    refreshSyncUI();
   }
 
   /* ---------------- today ---------------- */
@@ -1503,8 +1489,6 @@
       '<p class="muted small" style="margin:0">The real ITE window is roughly mid-January to mid-February. Default target is 15 January 2027 — adjust it to your scheduled date.</p>' +
       '</section>';
 
-    html += renderSyncCard();
-
     html += '<details class="fold card"><summary>Backup and restore</summary>' +
       '<div class="stack">' +
       '<button class="btn wide" data-action="export-json">Export all (JSON)</button>' +
@@ -2101,31 +2085,9 @@
       return;
     }
 
-    /* --- sync --- */
-    if (action === "sync-start") {
-      startWorkspace();
-      return;
-    }
-    if (action === "sync-now") {
-      syncNow("manual");
-      return;
-    }
-    if (action === "sync-copy") {
-      copyText(shareLink());
-      return;
-    }
-    if (action === "sync-off") {
-      if (!window.confirm("Stop sharing on this device? The shared copy stays online and you can join it again with the link.")) return;
-      const s = syncSettings();
-      s.off = true;
-      s.blobId = "";
-      s.lastError = "";
-      s.lastSyncAt = 0;
-      persist();
-      render();
-      toast("This device is on its own now");
-      return;
-    }
+
+
+
 
     /* --- more --- */
     if (action === "export-json") {
@@ -2179,11 +2141,8 @@
     if (action === "reset-all") {
       if (!window.confirm("Delete all questions and progress, and reload the full question bank? This cannot be undone.")) return;
       const settings = Object.assign({}, state.settings);
-      const sync = Object.assign({}, state.sync);
       state = defaultState();
       state.settings = settings;
-      state.sync = sync;
-      state.meta.settingsAt = Date.now();
       state.seeded = true;
       state.questions = normalizeEsapBank().concat(normalizeFreeBank());
       state.deletedBankIds = [];
@@ -2213,8 +2172,6 @@
       return;
     }
 
-    /* stamped so a merge can tell which phone changed the settings last */
-    state.meta.settingsAt = Date.now();
     save();
     render();
   }
@@ -2253,510 +2210,6 @@
     reader.readAsText(file);
   }
 
-  /* ---------------- sync (multi-device) ----------------
-     One phone creates a private cloud bin and shows a code; the other joins with
-     that code. From then on each phone pulls when it opens, pushes a few seconds
-     after a change, and merges rather than overwrites. */
-
-  const SYNC_BASE = "https://jsonblob.com/api/jsonBlob";
-  const SYNC_TIMEOUT = 12000;
-  const SYNC_DEBOUNCE = 2500;
-
-  /* The board everybody shares. Leave empty and the first person to start it
-     gets an id that the app writes into the address, so the link becomes the
-     board. Paste an id here to make the bare site URL the board for everybody. */
-  const LIVE_STORE = { blobId: "" };
-
-  let syncBusy = false;
-  let syncQueued = false;
-  let syncTimer = null;
-  let syncRetryMs = 0;
-
-  function syncSettings() {
-    if (!state.sync) state.sync = defaultSync();
-    return state.sync;
-  }
-
-  function workspaceId() {
-    const s = syncSettings();
-    if (s.off) return "";
-    return s.blobId || LIVE_STORE.blobId || "";
-  }
-
-  function syncReady() {
-    return !!workspaceId();
-  }
-
-  function workspaceUrl() {
-    return SYNC_BASE + "/" + encodeURIComponent(workspaceId());
-  }
-
-  function shareLink() {
-    const base = window.location.origin + window.location.pathname;
-    return base + "?w=" + encodeURIComponent(workspaceId());
-  }
-
-  /* Remembers the board on this device and puts it in the address bar, so the
-     URL itself is the thing to send. */
-  function rememberWorkspace(id) {
-    if (!id) return;
-    const s = syncSettings();
-    s.blobId = String(id);
-    s.off = false;
-    persist();
-    try {
-      const url = window.location.pathname + "?w=" + encodeURIComponent(s.blobId);
-      window.history.replaceState(null, "", url);
-    } catch (e) { /* some webviews refuse; the id is still saved */ }
-  }
-
-  function isOnline() {
-    return typeof navigator === "undefined" || navigator.onLine !== false;
-  }
-
-  function sinceLabel(ms) {
-    const d = Math.max(0, Date.now() - ms);
-    if (d < 60000) return "synced just now";
-    const m = Math.round(d / 60000);
-    if (m < 60) return "synced " + m + " min ago";
-    const h = Math.round(m / 60);
-    if (h < 24) return "synced " + h + " h ago";
-    return "synced " + Math.round(h / 24) + " days ago";
-  }
-
-  function syncLabel() {
-    const s = syncSettings();
-    if (!syncReady()) return "Off";
-    if (syncBusy) return "Syncing…";
-    if (s.lastError) return "Sync failed";
-    if (!s.lastSyncAt) return "On · waiting for first sync";
-    return "On · " + sinceLabel(s.lastSyncAt);
-  }
-
-  function syncStateClass() {
-    const s = syncSettings();
-    if (!syncReady()) return "off";
-    if (syncBusy) return "busy";
-    if (s.lastError) return "err";
-    return "ok";
-  }
-
-  /* Updates the few live bits of the sync UI without a full re-render. */
-  function refreshSyncUI() {
-    const cls = syncStateClass();
-    const s = syncSettings();
-
-    const line = document.getElementById("sync-line");
-    if (line) {
-      line.textContent = syncLabel();
-      line.className = "sync-line " + cls;
-    }
-
-    const summary = document.getElementById("sync-summary");
-    if (summary) summary.textContent = syncLabel();
-
-    const err = document.getElementById("sync-error");
-    if (err) {
-      err.textContent = s.lastError || "";
-      err.hidden = !s.lastError;
-    }
-
-    const dot = document.getElementById("sync-dot");
-    if (dot) {
-      dot.hidden = !syncReady();
-      dot.className = "sync-dot " + cls;
-    }
-  }
-
-  async function httpJson(url, opts) {
-    const cfg = Object.assign({ method: "GET", cache: "no-store" }, opts || {});
-    cfg.headers = Object.assign({ Accept: "application/json" }, cfg.headers || {});
-
-    let timer = null;
-    if (typeof AbortController !== "undefined") {
-      const ctrl = new AbortController();
-      cfg.signal = ctrl.signal;
-      timer = setTimeout(function () { ctrl.abort(); }, SYNC_TIMEOUT);
-    }
-
-    try {
-      const res = await fetch(url, cfg);
-      const text = await res.text();
-      let body = null;
-      if (text) {
-        try { body = JSON.parse(text); } catch (e) { body = null; }
-      }
-      if (!res.ok) {
-        const msg = (body && (body.message || body.error)) || ("HTTP " + res.status);
-        throw new Error(String(msg));
-      }
-      return body;
-    } catch (err) {
-      if (err && err.name === "AbortError") throw new Error("the sync service did not answer");
-      throw err;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  }
-
-  async function syncReadRemote() {
-    if (!syncReady()) return null;
-    return await httpJson(workspaceUrl());
-  }
-
-  async function syncWriteRemote(doc) {
-    if (!syncReady()) throw new Error("no shared copy yet");
-    await httpJson(workspaceUrl(), {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(doc)
-    });
-  }
-
-  /* The shipped bank is identical on every phone, so only local edits and
-     written questions travel. */
-  function shippedBank() {
-    const m = {};
-    normalizeEsapBank().concat(normalizeFreeBank()).forEach(function (q) { m[q.id] = q; });
-    return m;
-  }
-
-  function changedQuestions() {
-    const bank = shippedBank();
-    const out = [];
-    state.questions.forEach(function (q) {
-      const b = bank[q.id];
-      const differs = !b ||
-        q.section !== b.section ||
-        q.answer !== b.answer ||
-        q.vignette !== b.vignette ||
-        (q.why || "") !== (b.why || "") ||
-        (q.ref || "") !== (b.ref || "") ||
-        (q.options || []).join("\u0001") !== (b.options || []).join("\u0001");
-      if (!differs) return;
-      out.push({
-        id: q.id,
-        section: q.section,
-        vignette: q.vignette,
-        options: q.options,
-        answer: q.answer,
-        why: q.why || "",
-        ref: q.ref || "",
-        source: q.source || "local",
-        updatedAt: q.updatedAt || 0
-      });
-    });
-    return out;
-  }
-
-  function buildSyncDoc() {
-    return {
-      app: "endo-study",
-      v: 1,
-      device: syncSettings().deviceId,
-      progress: state.progress,
-      days: state.days,
-      learn: { done: state.learn && state.learn.done ? state.learn.done : {} },
-      deletedBankIds: state.deletedBankIds || [],
-      settings: state.settings,
-      settingsAt: state.meta.settingsAt || 0,
-      questions: changedQuestions()
-    };
-  }
-
-  function mergeProgressRecord(a, b) {
-    if (!a) return Object.assign({}, b);
-    if (!b) return Object.assign({}, a);
-
-    const ra = Number(a.reps) || 0;
-    const rb = Number(b.reps) || 0;
-    /* the phone that has taken the card further owns the schedule; on a tie the
-       earlier due date wins so a card is never pushed further away */
-    let winner;
-    if (rb !== ra) {
-      winner = rb > ra ? b : a;
-    } else {
-      const da = String(a.due || "");
-      const db = String(b.due || "");
-      winner = db && (!da || db < da) ? b : a;
-    }
-
-    const out = Object.assign({}, winner);
-    out.attempts = Math.max(Number(a.attempts) || 0, Number(b.attempts) || 0);
-    out.correct = Math.max(Number(a.correct) || 0, Number(b.correct) || 0);
-    out.lapses = Math.max(Number(a.lapses) || 0, Number(b.lapses) || 0);
-    out.reps = Math.max(ra, rb);
-    out.interval = Math.max(Number(a.interval) || 0, Number(b.interval) || 0);
-    out.flagged = !!(a.flagged || b.flagged);
-    out.last = [a.last, b.last].filter(Boolean).sort().pop() || null;
-    out.firstSeen = [a.firstSeen, b.firstSeen].filter(Boolean).sort()[0] || null;
-    out.due = winner.due || todayKey();
-    return out;
-  }
-
-  function mergeRemote(doc) {
-    if (!doc || doc.app !== "endo-study") return false;
-    let changed = false;
-
-    const remoteSet = Number(doc.settingsAt) || 0;
-    if (doc.settings && remoteSet > (state.meta.settingsAt || 0)) {
-      state.settings = Object.assign({}, DEFAULT_SETTINGS, doc.settings);
-      state.meta.settingsAt = remoteSet;
-      changed = true;
-    }
-
-    const remoteProgress = doc.progress && typeof doc.progress === "object" ? doc.progress : {};
-    Object.keys(remoteProgress).forEach(function (id) {
-      const merged = mergeProgressRecord(state.progress[id], remoteProgress[id]);
-      if (!merged) return;
-      if (JSON.stringify(state.progress[id] || null) !== JSON.stringify(merged)) {
-        state.progress[id] = merged;
-        changed = true;
-      }
-    });
-
-    const remoteDays = doc.days && typeof doc.days === "object" ? doc.days : {};
-    Object.keys(remoteDays).forEach(function (k) {
-      const loc = state.days[k] || { reviews: 0, newQ: 0 };
-      const rem = remoteDays[k] || {};
-      const reviews = Math.max(Number(loc.reviews) || 0, Number(rem.reviews) || 0);
-      const newQ = Math.max(Number(loc.newQ) || 0, Number(rem.newQ) || 0);
-      if (reviews !== (Number(loc.reviews) || 0) || newQ !== (Number(loc.newQ) || 0)) {
-        state.days[k] = { reviews: reviews, newQ: newQ };
-        changed = true;
-      }
-    });
-
-    if (!state.learn) state.learn = { done: {} };
-    if (!state.learn.done) state.learn.done = {};
-    const remoteLearn = (doc.learn && doc.learn.done) || {};
-    Object.keys(remoteLearn).forEach(function (id) {
-      if (remoteLearn[id] && !state.learn.done[id]) {
-        state.learn.done[id] = true;
-        changed = true;
-      }
-    });
-
-    if (!Array.isArray(state.deletedBankIds)) state.deletedBankIds = [];
-    const remoteDeleted = Array.isArray(doc.deletedBankIds) ? doc.deletedBankIds : [];
-    remoteDeleted.forEach(function (id) {
-      if (state.deletedBankIds.indexOf(id) !== -1) return;
-      state.deletedBankIds.push(id);
-      state.questions = state.questions.filter(function (q) { return q.id !== id; });
-      delete state.progress[id];
-      changed = true;
-    });
-
-    const remoteQuestions = Array.isArray(doc.questions) ? doc.questions : [];
-    remoteQuestions.forEach(function (q) {
-      if (!q || !q.id || !q.vignette || !Array.isArray(q.options)) return;
-      if (state.deletedBankIds.indexOf(q.id) !== -1) return;
-      const local = getQuestion(q.id);
-      if (!local) {
-        state.questions.push(Object.assign({}, q));
-        changed = true;
-      } else if ((Number(q.updatedAt) || 0) > (Number(local.updatedAt) || 0)) {
-        Object.assign(local, q);
-        changed = true;
-      }
-    });
-
-    state.totalAnswered = Object.keys(state.progress).reduce(function (n, id) {
-      return n + (Number(state.progress[id].attempts) || 0);
-    }, 0);
-
-    return changed;
-  }
-
-  function softRender() {
-    const a = document.activeElement;
-    const typing = a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT");
-    if (!typing) render();
-  }
-
-  function scheduleSync(delay) {
-    if (!syncReady()) return;
-    if (syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(function () {
-      syncTimer = null;
-      syncNow("auto");
-    }, typeof delay === "number" ? delay : SYNC_DEBOUNCE);
-  }
-
-  function scheduleRetry() {
-    if (!syncReady()) return;
-    syncRetryMs = syncRetryMs ? Math.min(syncRetryMs * 2, 300000) : 30000;
-    scheduleSync(syncRetryMs);
-  }
-
-  async function syncNow(reason) {
-    if (!syncReady()) return false;
-
-    if (!isOnline()) {
-      const s = syncSettings();
-      s.lastError = "No connection — this phone will sync when it is back online.";
-      persist();
-      refreshSyncUI();
-      scheduleRetry();
-      return false;
-    }
-
-    if (syncBusy) {
-      syncQueued = true;
-      return false;
-    }
-
-    syncBusy = true;
-    refreshSyncUI();
-
-    try {
-      let merged = false;
-      let remote = null;
-      try {
-        remote = await syncReadRemote();
-      } catch (err) {
-        /* a bin that has no document yet is not a failure */
-        if (!/not found|404|no record/i.test(String(err && err.message ? err.message : err))) throw err;
-      }
-      if (remote) merged = mergeRemote(remote);
-
-      await syncWriteRemote(buildSyncDoc());
-
-      const s = syncSettings();
-      s.lastError = "";
-      s.lastSyncAt = Date.now();
-      persist();
-      refreshSyncUI();
-      if (merged) softRender();
-      return true;
-    } catch (err) {
-      const s = syncSettings();
-      s.lastError = String(err && err.message ? err.message : err);
-      persist();
-      refreshSyncUI();
-      if (reason === "manual") toast("Sync failed: " + s.lastError);
-      scheduleRetry();
-      return false;
-    } finally {
-      syncBusy = false;
-      refreshSyncUI();
-      if (syncQueued) {
-        syncQueued = false;
-        scheduleSync(1500);
-      }
-    }
-  }
-
-  /* Starts the shared board in one tap: no account, no key to paste. */
-  async function startWorkspace() {
-    if (syncBusy) return;
-    syncBusy = true;
-    refreshSyncUI();
-
-    let id = "";
-
-    try {
-      const res = await fetch(SYNC_BASE, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildSyncDoc())
-      });
-
-      if (!res.ok) throw new Error("HTTP " + res.status);
-
-      const loc = res.headers.get("Location") || "";
-      const m = /\/([A-Za-z0-9-]+)\s*$/.exec(loc);
-      if (m) id = m[1];
-
-      if (!id) {
-        const text = await res.text();
-        let body = null;
-        try { body = text ? JSON.parse(text) : null; } catch (e) { body = null; }
-        if (body && body.id) id = String(body.id);
-      }
-
-      if (!id) throw new Error("the shared copy was not created");
-    } catch (err) {
-      const s = syncSettings();
-      s.lastError = String(err && err.message ? err.message : err);
-      toast("Could not start the shared copy: " + s.lastError);
-      syncBusy = false;
-      refreshSyncUI();
-      return;
-    }
-
-    syncBusy = false;
-    rememberWorkspace(id);
-
-    const s = syncSettings();
-    s.lastError = "";
-    s.lastSyncAt = Date.now();
-    persist();
-
-    await syncNow("start");
-    render();
-    toast("Shared copy is on");
-  }
-
-  async function copyText(text) {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        toast("Code copied");
-        return;
-      }
-    } catch (e) { /* fall through to selecting it */ }
-    const box = document.getElementById("sync-code-box");
-    if (box) {
-      box.focus();
-      box.select();
-    }
-    toast("Long-press the link and copy it");
-  }
-
-  function renderSyncCard() {
-    const s = syncSettings();
-    const on = syncReady();
-
-    let html = '<section class="card">' +
-      '<div class="row between"><h3 style="margin:0">Shared live copy</h3>' +
-      '<span class="sync-line ' + syncStateClass() + '" id="sync-line">' +
-      esc(on ? syncLabel() : "Off") + '</span></div>';
-
-    if (on) {
-      html += '<p class="muted small" style="margin:8px 0 10px">Everyone who opens the link below studies from the same progress. What you answer here reaches it within a few seconds.</p>' +
-        '<textarea class="input ta-sm code-box" id="sync-code-box" readonly>' + esc(shareLink()) + '</textarea>' +
-        '<p class="sync-err" id="sync-error"' + (s.lastError ? "" : " hidden") + '>' +
-        esc(s.lastError || "") + '</p>' +
-        '<div class="stack" style="margin-top:8px">' +
-        '<button class="btn wide" data-action="sync-copy">Copy the link</button>' +
-        '<div class="row" style="gap:8px">' +
-        '<button class="btn ghost grow" data-action="sync-now">Sync now</button>' +
-        '<button class="btn ghost grow" data-action="sync-off">This device only</button>' +
-        '</div></div>';
-    } else {
-      html += '<p class="muted small" style="margin:8px 0 10px">Turn it on once and everyone you send the link to studies from the same progress — no account, no key to paste.</p>' +
-        '<button class="btn primary wide" data-action="sync-start">Start the shared copy</button>';
-    }
-
-    html += '</section>';
-    return html;
-  }
-
-  function startSync() {
-    document.addEventListener("visibilitychange", function () {
-      if (document.hidden) return;
-      refreshSyncUI();
-      if (syncReady()) syncNow("auto");
-    });
-
-    window.addEventListener("online", function () {
-      if (syncReady()) syncNow("auto");
-    });
-
-    if (syncReady()) syncNow("start");
-  }
-
   /* ---------------- init ---------------- */
   function init() {
     const startTab = String(window.location.hash || "").replace("#", "");
@@ -2786,15 +2239,7 @@
       toast("This browser is blocking storage, so progress will not be saved.");
     }
 
-    /* a shared link carries the board id in its query string */
-    const shared = /[?&]w=([^&]+)/.exec(String(window.location.search || ""));
-    if (shared) {
-      const id = decodeURIComponent(shared[1]);
-      if (id) rememberWorkspace(id);
-    }
-
     render();
-    startSync();
   }
 
   if (document.readyState === "loading") {
