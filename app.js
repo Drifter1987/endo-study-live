@@ -179,7 +179,7 @@
       totalAnswered: 0,
       deletedBankIds: [],
       learn: { done: {} },
-      meta: { createdAt: Date.now(), lastSavedAt: 0 },
+      meta: { createdAt: Date.now(), lastSavedAt: 0, settingsAt: 0, lastPushAt: 0 },
       sync: defaultSync()
     };
   }
@@ -288,7 +288,7 @@
     s.totalAnswered = s.totalAnswered || 0;
 
     /* v1 -> v2: metadata for timestamps and the live copy */
-    s.meta = Object.assign({ createdAt: Date.now(), lastSavedAt: 0 }, s.meta || {});
+    s.meta = Object.assign({ createdAt: Date.now(), lastSavedAt: 0, settingsAt: 0, lastPushAt: 0 }, s.meta || {});
     s.sync = Object.assign(defaultSync(), s.sync || {});
     s.version = APP_VERSION;
 
@@ -1826,7 +1826,7 @@
 
     if (data && data.learn && data.learn.done && typeof data.learn.done === "object") {
       Object.keys(data.learn.done).forEach(function (k) {
-        if (data.learn.done[k]) state.learn.done[k] = true;
+        if (data.learn.done[k]) state.learn.done[k] = Date.now();
       });
     }
 
@@ -1899,7 +1899,7 @@
     if (action === "learn-toggle") {
       const id = el.dataset.id;
       if (!id) return;
-      state.learn.done[id] = !state.learn.done[id];
+      state.learn.done[id] = state.learn.done[id] ? 0 : Date.now();
       save();
       render();
       return;
@@ -2070,7 +2070,7 @@
       const id = el.dataset.id;
       if (!id) return;
       const p = prog(id);
-      p.flagged = !p.flagged;
+      p.flagged = p.flagged ? 0 : Date.now();
       save();
       render();
       return;
@@ -2081,7 +2081,7 @@
       const q = getQuestion(s.ids[s.i]);
       if (!q) return;
       const p = prog(q.id);
-      p.flagged = !p.flagged;
+      p.flagged = p.flagged ? 0 : Date.now();
       save();
       render();
       return;
@@ -2131,6 +2131,11 @@
     }
     if (action === "sync-now") {
       syncNow("manual");
+      return;
+    }
+    if (action === "sync-force") {
+      if (!window.confirm("Overwrite the shared copy with what is on this device?")) return;
+      pushLocal();
       return;
     }
     if (action === "sync-off") {
@@ -2229,6 +2234,8 @@
       return;
     }
 
+    /* stamped so a merge knows this phone changed the settings last */
+    state.meta.settingsAt = Date.now();
     save();
     render();
   }
@@ -2423,6 +2430,7 @@
       device: syncSettings().deviceId,
       updatedAt: Date.now(),
       settings: state.settings,
+      settingsAt: state.meta.settingsAt || 0,
       progress: state.progress,
       days: state.days,
       learn: { done: state.learn && state.learn.done ? state.learn.done : {} },
@@ -2452,7 +2460,7 @@
     out.lapses = Math.max(Number(a.lapses) || 0, Number(b.lapses) || 0);
     out.reps = Math.max(ra, rb);
     out.interval = Math.max(Number(a.interval) || 0, Number(b.interval) || 0);
-    out.flagged = !!(a.flagged || b.flagged);
+    out.flagged = Math.max(Number(a.flagged) || 0, Number(b.flagged) || 0);
     out.last = [a.last, b.last].filter(Boolean).sort().pop() || null;
     out.firstSeen = [a.firstSeen, b.firstSeen].filter(Boolean).sort()[0] || null;
     out.due = winner.due || todayKey();
@@ -2463,8 +2471,14 @@
     if (!doc || doc.app !== "endo-study") return false;
     let changed = false;
 
-    if (doc.settings && typeof doc.settings === "object") {
+    /* settings: the phone that changed them last wins, and a phone that has
+       never changed them adopts whatever the shared copy says */
+    const remoteSet = Number(doc.settingsAt) || 0;
+    const localSet = Number(state.meta.settingsAt) || 0;
+    if (doc.settings && typeof doc.settings === "object" &&
+      (remoteSet > localSet || !localSet)) {
       state.settings = Object.assign({}, DEFAULT_SETTINGS, doc.settings);
+      state.meta.settingsAt = remoteSet;
       changed = true;
     }
 
@@ -2494,8 +2508,10 @@
     if (!state.learn.done) state.learn.done = {};
     const remoteLearn = (doc.learn && doc.learn.done) || {};
     Object.keys(remoteLearn).forEach(function (id) {
-      if (remoteLearn[id] && !state.learn.done[id]) {
-        state.learn.done[id] = true;
+      const cur = Number(state.learn.done[id]) || 0;
+      const rem = Number(remoteLearn[id]) || 0;
+      if (rem > cur) {
+        state.learn.done[id] = rem;
         changed = true;
       }
     });
@@ -2580,6 +2596,7 @@
       const s = syncSettings();
       s.lastError = "";
       s.lastSyncAt = Date.now();
+      state.meta.lastPushAt = Date.now();
       persist();
       refreshSyncUI();
       if (merged) softRender();
@@ -2602,6 +2619,40 @@
     }
   }
 
+  /* Writes this device's copy over the shared one, without merging first. The
+     way out if the two ever disagree. */
+  async function pushLocal() {
+    if (!syncReady()) return;
+    if (syncBusy) {
+      toast("Still saving…");
+      return;
+    }
+
+    syncBusy = true;
+    refreshSyncUI();
+
+    try {
+      await syncWriteRemote(buildSyncDoc());
+      state.meta.lastPushAt = Date.now();
+
+      const s = syncSettings();
+      s.lastError = "";
+      s.lastSyncAt = Date.now();
+      persist();
+      refreshSyncUI();
+      toast("This copy was sent");
+    } catch (err) {
+      const s = syncSettings();
+      s.lastError = String(err && err.message ? err.message : err);
+      persist();
+      refreshSyncUI();
+      toast("Could not send: " + s.lastError);
+    } finally {
+      syncBusy = false;
+      refreshSyncUI();
+    }
+  }
+
   function renderSyncCard() {
     const s = syncSettings();
     const on = syncReady();
@@ -2617,7 +2668,8 @@
         '<div class="row" style="gap:8px">' +
         '<button class="btn ghost grow" data-action="sync-now">Save now</button>' +
         '<button class="btn ghost grow" data-action="sync-off">This device only</button>' +
-        '</div>';
+        '</div>' +
+        '<button class="btn ghost wide" style="margin-top:8px" data-action="sync-force">Send this copy anyway</button></div>';
     } else {
       html += '<p class="muted small" style="margin:8px 0 10px">Point the app at a free Firebase Realtime Database and every phone on the same address shares one progress. Paste the database address — it is a URL, not a key.</p>' +
         '<label class="field"><span>Database address</span>' +
