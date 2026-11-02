@@ -2125,13 +2125,13 @@
       return;
     }
     if (action === "sync-copy") {
-      copyText(encodeSyncCode());
+      copyText(shareLink());
       return;
     }
     if (action === "sync-off") {
       if (!window.confirm("Turn sync off on this phone? The cloud copy is kept and you can join it again with your code.")) return;
       const s = syncSettings();
-      s.provider = "";
+      s.provider = "off";
       s.key = "";
       s.binId = "";
       s.lastError = "";
@@ -2288,6 +2288,11 @@
   const SYNC_TIMEOUT = 12000;
   const SYNC_DEBOUNCE = 4000;
 
+  /* The one workspace everybody who opens the site shares. Put the bin id and
+     master key of a JSONBin bin here and the deployed URL itself becomes live:
+     any visitor reads the last edits and their own answers are written back. */
+  const LIVE_STORE = { key: "", binId: "" };
+
   let syncBusy = false;
   let syncQueued = false;
   let syncTimer = null;
@@ -2295,12 +2300,27 @@
 
   function syncSettings() {
     if (!state.sync) state.sync = defaultSync();
-    return state.sync;
+    const s = state.sync;
+
+    /* a workspace baked into the app wins over nothing, but never over a
+       deliberate opt-out on this device */
+    if (s.provider !== "off" && !s.key && !s.binId && LIVE_STORE.key && LIVE_STORE.binId) {
+      s.provider = "jsonbin";
+      s.key = LIVE_STORE.key;
+      s.binId = LIVE_STORE.binId;
+    }
+    return s;
   }
 
   function syncReady() {
     const s = syncSettings();
+    if (s.provider === "off") return false;
     return !!(s.key && s.binId);
+  }
+
+  function shareLink() {
+    const base = window.location.origin + window.location.pathname;
+    return base + "?code=" + encodeURIComponent(encodeSyncCode());
   }
 
   function isOnline() {
@@ -2755,7 +2775,7 @@
       box.focus();
       box.select();
     }
-    toast("Long-press the code and copy it");
+    toast("Long-press the link and copy it");
   }
 
   function renderSyncCard() {
@@ -2765,35 +2785,36 @@
     const cls = syncStateClass();
 
     let html = '<details class="fold card"' + (panel ? " open" : "") + '>' +
-      '<summary>Sync across devices <span class="sync-line ' + cls + '" id="sync-summary">' +
+      '<summary>Shared live copy <span class="sync-line ' + cls + '" id="sync-summary">' +
       esc(syncLabel()) + '</span></summary>';
 
     if (on) {
-      html += '<div class="kv"><span>Status</span><span class="sync-line ' + cls + '" id="sync-line">' +
+      html += '<p class="muted small" style="margin:0 0 10px">Everyone who opens the shared link studies from the same questions, schedule and reading list, and the last answer saved wins. What you do here reaches the shared copy a few seconds later.</p>' +
+        '<div class="kv"><span>Status</span><span class="sync-line ' + cls + '" id="sync-line">' +
         esc(syncLabel()) + '</span></div>' +
         '<p class="sync-err" id="sync-error"' + (s.lastError ? "" : " hidden") + '>' +
         esc(s.lastError || "") + '</p>' +
         '<div class="stack" style="margin-top:10px">' +
-        '<button class="btn wide" data-action="sync-now">Sync now</button>' +
-        '<button class="btn ghost wide" data-action="sync-panel" data-panel="code">Show the code for another phone</button>' +
-        '<button class="btn ghost wide danger" data-action="sync-off">Turn sync off on this phone</button>' +
+        '<button class="btn wide" data-action="sync-panel" data-panel="code">Copy the link to share</button>' +
+        '<button class="btn ghost wide" data-action="sync-now">Sync now</button>' +
+        '<button class="btn ghost wide danger" data-action="sync-off">Use this device only</button>' +
         '</div>';
     }
 
     if (panel === "code") {
-      html += '<p class="muted small" style="margin:12px 0 8px">Open the app on the other phone, choose <b>Join an existing sync</b>, and paste this code. Anyone who has the code can change this progress, so send it only to your own phone.</p>' +
-        '<textarea class="input ta-sm code-box" id="sync-code-box" readonly>' + esc(encodeSyncCode()) + '</textarea>' +
+      html += '<p class="muted small" style="margin:12px 0 8px">Send this link. Anyone who opens it joins the same live copy — their answers replace what is here as they save, so share it only with people you are studying with.</p>' +
+        '<textarea class="input ta-sm code-box" id="sync-code-box" readonly>' + esc(shareLink()) + '</textarea>' +
         '<div class="stack" style="margin-top:8px">' +
-        '<button class="btn wide" data-action="sync-copy">Copy the code</button>' +
+        '<button class="btn wide" data-action="sync-copy">Copy the link</button>' +
         '</div>';
     }
 
     if (panel === "create") {
-      html += '<p class="muted small" style="margin:12px 0 8px">Sync keeps a private copy of your progress in the cloud through <b>JSONBin</b>, which is free. Make an account there, copy the <b>master key</b> from its API keys page, and paste it here — it is stored on this phone only.</p>' +
+      html += '<p class="muted small" style="margin:12px 0 8px">The shared copy lives in <b>JSONBin</b>, which is free. Make an account there, copy the <b>master key</b> from its API keys page, and paste it here. One person does this once and the link works for everyone after that.</p>' +
         '<label class="field"><span>JSONBin master key</span>' +
         '<input class="input" id="sync-key" type="text" autocomplete="off" spellcheck="false" value="' +
         esc(ui.syncKey || "") + '" placeholder="$2a$10$…" /></label>' +
-        '<button class="btn primary wide" data-action="sync-create">Create my sync</button>';
+        '<button class="btn primary wide" data-action="sync-create">Create the shared copy</button>';
     }
 
     if (panel === "join") {
@@ -2804,9 +2825,9 @@
     }
 
     if (!on && !panel) {
-      html += '<p class="muted small" style="margin:0 0 10px">Keep two phones on the same questions, schedule and reading list. Set it up once — after that the app syncs by itself whenever it is open.</p>' +
+      html += '<p class="muted small" style="margin:0 0 10px">Turn on the shared copy and everyone who opens the link studies from the same progress. Set it up once — after that the app syncs by itself whenever it is open.</p>' +
         '<div class="stack">' +
-        '<button class="btn wide" data-action="sync-panel" data-panel="create">Set up sync on this phone</button>' +
+        '<button class="btn wide" data-action="sync-panel" data-panel="create">Turn on the shared copy</button>' +
         '<button class="btn ghost wide" data-action="sync-panel" data-panel="join">Join an existing sync</button>' +
         '</div>';
     }
@@ -2856,6 +2877,20 @@
 
     if (!storageOk()) {
       toast("This browser is blocking storage, so progress will not be saved.");
+    }
+
+    /* a shared link carries the workspace in its query string */
+    const shared = /[?&]code=([^&]+)/.exec(String(window.location.search || ""));
+    if (shared) {
+      const parsed = decodeSyncCode(decodeURIComponent(shared[1]));
+      if (parsed) {
+        const s = syncSettings();
+        s.provider = "jsonbin";
+        s.key = parsed.key;
+        s.binId = parsed.binId;
+        s.lastError = "";
+        persist();
+      }
     }
 
     render();

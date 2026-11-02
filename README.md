@@ -30,25 +30,25 @@ Today, the study plan, Study, grading, the timed mock, Questions, Learn, More �
 caption under each screen, a progress bar and chapter buttons for jumping. **Watch the app tour**
 on Today and in **More → How this app works** opens it.
 
-## Sync across devices
+## One live copy for everyone
 
-Set it up once: **More → Sync across devices → Set up sync on this phone**. The app creates a
-private cloud bin through JSONBin (free) and shows a **sync code**. On the second phone choose
-**Join an existing sync**, paste the code, and the two are one bank from then on.
+The app keeps working with no connection, but it can also be **one shared board**: whoever opens
+the link reads the last saved progress, and whatever they answer is written back within a few
+seconds.
 
-- **Automatic** — it pulls when the app opens and whenever the phone comes back to it, and pushes
-  a few seconds after any change. Nothing to press.
-- **Merging, not overwriting** — progress is merged per question: the phone that took a card
-  further owns its schedule, attempts and correct answers take the higher count, flags and
-  reading ticks are combined, and the later settings change wins. Two phones used offline
-  converge the next time both are online.
+Turn it on once: **More → Shared live copy → Turn on the shared copy**. It needs a free JSONBin
+key (the app creates the copy itself), then it shows a **link to share** — that link carries the
+workspace, so anyone opening it joins the same progress. The same workspace can be baked into the
+app for everybody by filling `LIVE_STORE` at the top of `app.js` with the bin id and key; after
+that the bare site URL is the live one.
+
+- **Last edit wins, per question** — a save overwrites the shared copy, but progress is merged so
+  a count is never lost: the phone that took a card further owns its schedule, attempts and
+  correct answers take the higher count, flags and reading ticks are combined.
+- **Automatic** — it pulls when the app opens and whenever it comes back to the foreground, and
+  pushes a few seconds after every change.
 - **Offline-safe** — no connection only means it retries; the app keeps working and saves locally.
-- **What it needs** — one free JSONBin account for the master key. The key stays on the phone, but
-  the sync code contains it, so send that code only to your own phone.
-- **Turn sync off** on a phone without touching the cloud copy; join again with the same code
-  later.
-
-The status shows in the More card and as a small dot beside the exam countdown.
+- **This device only** turns sharing off on one device without touching the shared copy.
 
 ## The question bank
 
