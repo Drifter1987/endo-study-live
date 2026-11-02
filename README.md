@@ -29,12 +29,32 @@ Today, the study plan, Study, grading, the timed mock, Questions, Learn, More �
 caption under each screen, a progress bar and chapter buttons for jumping. **Watch the app tour**
 on Today and in **More → How this app works** opens it.
 
-## Moving progress between devices
+## One live copy
 
-There is no account, no server and no third-party service: progress lives on the device.
-**More → Backup and restore → Export all** writes a JSON file, and **Restore from a backup** on
-another phone merges it in. That is how progress travels between devices, and it is the one copy
-that survives a wiped browser.
+Progress can live in a free **Firebase Realtime Database**, so every phone that opens the site
+reads the last saved progress and writes its own answers back — no cost, no API key, no account
+for the people studying.
+
+**Set it up once (about three minutes):**
+
+1. console.firebase.google.com → **Add project** (any name, Analytics off).
+2. **Build → Realtime Database → Create Database**, then choose **Start in test mode**.
+3. Open the **Rules** tab and replace everything with this, so the app may read and write its own
+   node for good:
+   `{ "rules": { "endo-study": { ".read": true, ".write": true } } }`
+4. Copy the database address shown at the top (it looks like
+   `https://your-project-default-rtdb.firebaseio.com`).
+5. Open the app → **More → Live copy** → paste that address → **Use this copy**.
+
+From then on every answer is pushed a couple of seconds after you save, and each device pulls the
+latest copy when it opens or comes back to the foreground. **Save now** forces it; **This device
+only** opts one phone out. To make the deployed site live for everybody with no pasting, put the
+same address into `LIVE_DB` at the top of `app.js`.
+
+Saving is last-write-wins per question: the device that has taken a card further owns its
+schedule, attempts and correct answers take the higher count, flags and reading ticks are
+combined. Progress on the device is always kept as well, so the app still works offline and
+**Export all** remains the backup that survives everything.
 
 ## The question bank
 

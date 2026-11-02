@@ -158,6 +158,16 @@
   }
 
   /* ---------------- state ---------------- */
+  function defaultSync() {
+    return {
+      url: "",
+      off: false,
+      deviceId: "d-" + Math.random().toString(36).slice(2, 10),
+      lastSyncAt: 0,
+      lastError: ""
+    };
+  }
+
   function defaultState() {
     return {
       version: APP_VERSION,
@@ -169,7 +179,8 @@
       totalAnswered: 0,
       deletedBankIds: [],
       learn: { done: {} },
-      meta: { createdAt: Date.now(), lastSavedAt: 0 }
+      meta: { createdAt: Date.now(), lastSavedAt: 0 },
+      sync: defaultSync()
     };
   }
 
@@ -276,8 +287,9 @@
     if (!s.days || typeof s.days !== "object") s.days = {};
     s.totalAnswered = s.totalAnswered || 0;
 
-    /* v1 -> v2: a metadata block for timestamps */
+    /* v1 -> v2: metadata for timestamps and the live copy */
     s.meta = Object.assign({ createdAt: Date.now(), lastSavedAt: 0 }, s.meta || {});
+    s.sync = Object.assign(defaultSync(), s.sync || {});
     s.version = APP_VERSION;
 
     if (!s.seeded) {
@@ -325,10 +337,11 @@
     }
   }
 
-  /* Every change the user makes goes through save(), which writes to this
-     device. */
+  /* Every change the user makes goes through save(): write to this device, then
+     push to the live copy a moment later if it is on. */
   function save() {
     persist();
+    scheduleSync();
   }
 
   function storageOk() {
@@ -560,6 +573,7 @@
 
     renderChrome();
     syncClock();
+    refreshSyncUI();
   }
 
   /* ---------------- today ---------------- */
@@ -1489,6 +1503,8 @@
       '<p class="muted small" style="margin:0">The real ITE window is roughly mid-January to mid-February. Default target is 15 January 2027 — adjust it to your scheduled date.</p>' +
       '</section>';
 
+    html += renderSyncCard();
+
     html += '<details class="fold card"><summary>Backup and restore</summary>' +
       '<div class="stack">' +
       '<button class="btn wide" data-action="export-json">Export all (JSON)</button>' +
@@ -2089,6 +2105,39 @@
 
 
 
+    /* --- live copy --- */
+    if (action === "sync-link") {
+      const urlEl = document.getElementById("sync-url");
+      const url = urlEl ? urlEl.value.trim() : "";
+      if (!/^https?:\/\/\S+$/i.test(url)) {
+        toast("Paste the https address of your database");
+        return;
+      }
+      const s = syncSettings();
+      s.url = url.replace(/\/+$/, "");
+      s.off = false;
+      s.lastError = "";
+      persist();
+      syncNow("manual");
+      render();
+      return;
+    }
+    if (action === "sync-now") {
+      syncNow("manual");
+      return;
+    }
+    if (action === "sync-off") {
+      if (!window.confirm("Stop sharing on this device? The database keeps the last saved copy.")) return;
+      const s = syncSettings();
+      s.off = true;
+      s.lastError = "";
+      s.lastSyncAt = 0;
+      persist();
+      render();
+      toast("This device is on its own now");
+      return;
+    }
+
     /* --- more --- */
     if (action === "export-json") {
       const payload = {
@@ -2210,6 +2259,383 @@
     reader.readAsText(file);
   }
 
+  /* ---------------- live copy (Firebase Realtime Database) ----------------
+     One small JSON document holds the progress. The database address is public
+     and the rules allow read and write on the "endo-study" node, so there is no
+     key anywhere: every device with that address sees the same progress and
+     writes back to it. */
+
+  const LIVE_DB = { url: "" };
+  const SYNC_TIMEOUT = 12000;
+  const SYNC_DEBOUNCE = 2500;
+
+  let syncBusy = false;
+  let syncQueued = false;
+  let syncTimer = null;
+  let syncRetryMs = 0;
+
+  function syncSettings() {
+    if (!state.sync) state.sync = defaultSync();
+    return state.sync;
+  }
+
+  function syncUrl() {
+    const s = syncSettings();
+    if (s.off) return "";
+    return (s.url || LIVE_DB.url || "").replace(/\/+$/, "");
+  }
+
+  function syncReady() {
+    return !!syncUrl();
+  }
+
+  function statePath() {
+    return syncUrl() + "/endo-study/state.json";
+  }
+
+  function sinceLabel(ms) {
+    const d = Math.max(0, Date.now() - ms);
+    if (d < 60000) return "just now";
+    const m = Math.round(d / 60000);
+    if (m < 60) return m + " min ago";
+    const h = Math.round(m / 60);
+    if (h < 24) return h + " h ago";
+    return Math.round(h / 24) + " days ago";
+  }
+
+  function syncLabel() {
+    const s = syncSettings();
+    if (!syncReady()) return "Off";
+    if (syncBusy) return "Syncing…";
+    if (s.lastError) return "Not saved";
+    if (!s.lastSyncAt) return "On · not synced yet";
+    return "Saved " + sinceLabel(s.lastSyncAt);
+  }
+
+  function syncStateClass() {
+    const s = syncSettings();
+    if (!syncReady()) return "off";
+    if (syncBusy) return "busy";
+    if (s.lastError) return "err";
+    return "ok";
+  }
+
+  function refreshSyncUI() {
+    const line = document.getElementById("sync-line");
+    if (!line) return;
+    line.textContent = syncLabel();
+    line.className = "sync-line " + syncStateClass();
+  }
+
+  async function httpJson(url, opts) {
+    const cfg = Object.assign({ method: "GET", cache: "no-store" }, opts || {});
+    cfg.headers = Object.assign({ Accept: "application/json" }, cfg.headers || {});
+
+    let timer = null;
+    if (typeof AbortController !== "undefined") {
+      const ctrl = new AbortController();
+      cfg.signal = ctrl.signal;
+      timer = setTimeout(function () { ctrl.abort(); }, SYNC_TIMEOUT);
+    }
+
+    try {
+      const res = await fetch(url, cfg);
+      const text = await res.text();
+      let body = null;
+      if (text) {
+        try { body = JSON.parse(text); } catch (e) { body = null; }
+      }
+      if (!res.ok) {
+        const msg = (body && (body.error || body.message)) || ("HTTP " + res.status);
+        throw new Error(String(msg));
+      }
+      return body;
+    } catch (err) {
+      if (err && err.name === "AbortError") throw new Error("the database did not answer");
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async function syncReadRemote() {
+    if (!syncReady()) return null;
+    return await httpJson(statePath());
+  }
+
+  async function syncWriteRemote(doc) {
+    if (!syncReady()) throw new Error("no live copy yet");
+    await httpJson(statePath(), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(doc)
+    });
+  }
+
+  /* The shipped bank is identical everywhere, so only local edits and written
+     questions travel. */
+  function shippedBank() {
+    const m = {};
+    normalizeEsapBank().concat(normalizeFreeBank()).forEach(function (q) { m[q.id] = q; });
+    return m;
+  }
+
+  function changedQuestions() {
+    const bank = shippedBank();
+    const out = [];
+    state.questions.forEach(function (q) {
+      const b = bank[q.id];
+      const differs = !b ||
+        q.section !== b.section ||
+        q.answer !== b.answer ||
+        q.vignette !== b.vignette ||
+        (q.why || "") !== (b.why || "") ||
+        (q.ref || "") !== (b.ref || "") ||
+        (q.options || []).join("\u0001") !== (b.options || []).join("\u0001");
+      if (!differs) return;
+      out.push({
+        id: q.id,
+        section: q.section,
+        vignette: q.vignette,
+        options: q.options,
+        answer: q.answer,
+        why: q.why || "",
+        ref: q.ref || "",
+        source: q.source || "local",
+        updatedAt: q.updatedAt || 0
+      });
+    });
+    return out;
+  }
+
+  function buildSyncDoc() {
+    return {
+      app: "endo-study",
+      v: 2,
+      device: syncSettings().deviceId,
+      updatedAt: Date.now(),
+      settings: state.settings,
+      progress: state.progress,
+      days: state.days,
+      learn: { done: state.learn && state.learn.done ? state.learn.done : {} },
+      deletedBankIds: state.deletedBankIds || [],
+      questions: changedQuestions()
+    };
+  }
+
+  function mergeProgressRecord(a, b) {
+    if (!a) return Object.assign({}, b);
+    if (!b) return Object.assign({}, a);
+
+    const ra = Number(a.reps) || 0;
+    const rb = Number(b.reps) || 0;
+    let winner;
+    if (rb !== ra) {
+      winner = rb > ra ? b : a;
+    } else {
+      const da = String(a.due || "");
+      const db = String(b.due || "");
+      winner = db && (!da || db < da) ? b : a;
+    }
+
+    const out = Object.assign({}, winner);
+    out.attempts = Math.max(Number(a.attempts) || 0, Number(b.attempts) || 0);
+    out.correct = Math.max(Number(a.correct) || 0, Number(b.correct) || 0);
+    out.lapses = Math.max(Number(a.lapses) || 0, Number(b.lapses) || 0);
+    out.reps = Math.max(ra, rb);
+    out.interval = Math.max(Number(a.interval) || 0, Number(b.interval) || 0);
+    out.flagged = !!(a.flagged || b.flagged);
+    out.last = [a.last, b.last].filter(Boolean).sort().pop() || null;
+    out.firstSeen = [a.firstSeen, b.firstSeen].filter(Boolean).sort()[0] || null;
+    out.due = winner.due || todayKey();
+    return out;
+  }
+
+  function mergeRemote(doc) {
+    if (!doc || doc.app !== "endo-study") return false;
+    let changed = false;
+
+    if (doc.settings && typeof doc.settings === "object") {
+      state.settings = Object.assign({}, DEFAULT_SETTINGS, doc.settings);
+      changed = true;
+    }
+
+    const remoteProgress = doc.progress && typeof doc.progress === "object" ? doc.progress : {};
+    Object.keys(remoteProgress).forEach(function (id) {
+      const merged = mergeProgressRecord(state.progress[id], remoteProgress[id]);
+      if (!merged) return;
+      if (JSON.stringify(state.progress[id] || null) !== JSON.stringify(merged)) {
+        state.progress[id] = merged;
+        changed = true;
+      }
+    });
+
+    const remoteDays = doc.days && typeof doc.days === "object" ? doc.days : {};
+    Object.keys(remoteDays).forEach(function (k) {
+      const loc = state.days[k] || { reviews: 0, newQ: 0 };
+      const rem = remoteDays[k] || {};
+      const reviews = Math.max(Number(loc.reviews) || 0, Number(rem.reviews) || 0);
+      const newQ = Math.max(Number(loc.newQ) || 0, Number(rem.newQ) || 0);
+      if (reviews !== (Number(loc.reviews) || 0) || newQ !== (Number(loc.newQ) || 0)) {
+        state.days[k] = { reviews: reviews, newQ: newQ };
+        changed = true;
+      }
+    });
+
+    if (!state.learn) state.learn = { done: {} };
+    if (!state.learn.done) state.learn.done = {};
+    const remoteLearn = (doc.learn && doc.learn.done) || {};
+    Object.keys(remoteLearn).forEach(function (id) {
+      if (remoteLearn[id] && !state.learn.done[id]) {
+        state.learn.done[id] = true;
+        changed = true;
+      }
+    });
+
+    if (!Array.isArray(state.deletedBankIds)) state.deletedBankIds = [];
+    const remoteDeleted = Array.isArray(doc.deletedBankIds) ? doc.deletedBankIds : [];
+    remoteDeleted.forEach(function (id) {
+      if (state.deletedBankIds.indexOf(id) !== -1) return;
+      state.deletedBankIds.push(id);
+      state.questions = state.questions.filter(function (q) { return q.id !== id; });
+      delete state.progress[id];
+      changed = true;
+    });
+
+    const remoteQuestions = Array.isArray(doc.questions) ? doc.questions : [];
+    remoteQuestions.forEach(function (q) {
+      if (!q || !q.id || !q.vignette || !Array.isArray(q.options)) return;
+      if (state.deletedBankIds.indexOf(q.id) !== -1) return;
+      const local = getQuestion(q.id);
+      if (!local) {
+        state.questions.push(Object.assign({}, q));
+        changed = true;
+      } else if ((Number(q.updatedAt) || 0) > (Number(local.updatedAt) || 0)) {
+        Object.assign(local, q);
+        changed = true;
+      }
+    });
+
+    state.totalAnswered = Object.keys(state.progress).reduce(function (n, id) {
+      return n + (Number(state.progress[id].attempts) || 0);
+    }, 0);
+
+    return changed;
+  }
+
+  function softRender() {
+    const a = document.activeElement;
+    const typing = a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT");
+    if (!typing) render();
+  }
+
+  function scheduleSync(delay) {
+    if (!syncReady()) return;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(function () {
+      syncTimer = null;
+      syncNow("auto");
+    }, typeof delay === "number" ? delay : SYNC_DEBOUNCE);
+  }
+
+  function scheduleRetry() {
+    if (!syncReady()) return;
+    syncRetryMs = syncRetryMs ? Math.min(syncRetryMs * 2, 300000) : 30000;
+    scheduleSync(syncRetryMs);
+  }
+
+  async function syncNow(reason) {
+    if (!syncReady()) return false;
+
+    if (syncBusy) {
+      syncQueued = true;
+      return false;
+    }
+
+    syncBusy = true;
+    refreshSyncUI();
+
+    try {
+      let merged = false;
+      let remote = null;
+      try {
+        remote = await syncReadRemote();
+      } catch (err) {
+        /* an empty database answers null rather than failing; anything else
+           is a real problem */
+        if (!/404|not found/i.test(String(err && err.message ? err.message : err))) throw err;
+      }
+      if (remote) merged = mergeRemote(remote);
+
+      await syncWriteRemote(buildSyncDoc());
+
+      const s = syncSettings();
+      s.lastError = "";
+      s.lastSyncAt = Date.now();
+      persist();
+      refreshSyncUI();
+      if (merged) softRender();
+      return true;
+    } catch (err) {
+      const s = syncSettings();
+      s.lastError = String(err && err.message ? err.message : err);
+      persist();
+      refreshSyncUI();
+      if (reason === "manual") toast("Could not save to the live copy");
+      scheduleRetry();
+      return false;
+    } finally {
+      syncBusy = false;
+      refreshSyncUI();
+      if (syncQueued) {
+        syncQueued = false;
+        scheduleSync(1500);
+      }
+    }
+  }
+
+  function renderSyncCard() {
+    const s = syncSettings();
+    const on = syncReady();
+
+    let html = '<section class="card">' +
+      '<div class="row between"><h3 style="margin:0">Live copy</h3>' +
+      '<span class="sync-line ' + syncStateClass() + '" id="sync-line">' +
+      esc(syncLabel()) + '</span></div>';
+
+    if (on) {
+      html += '<p class="muted small" style="margin:8px 0 10px">Every device on this address studies from the same progress. An answer saved here reaches the others a couple of seconds later.</p>' +
+        '<p class="sync-err"' + (s.lastError ? "" : " hidden") + '>' + esc(s.lastError || "") + '</p>' +
+        '<div class="row" style="gap:8px">' +
+        '<button class="btn ghost grow" data-action="sync-now">Save now</button>' +
+        '<button class="btn ghost grow" data-action="sync-off">This device only</button>' +
+        '</div>';
+    } else {
+      html += '<p class="muted small" style="margin:8px 0 10px">Point the app at a free Firebase Realtime Database and every phone on the same address shares one progress. Paste the database address — it is a URL, not a key.</p>' +
+        '<label class="field"><span>Database address</span>' +
+        '<input class="input" id="sync-url" type="url" autocomplete="off" spellcheck="false" value="' +
+        esc(s.url || "") + '" placeholder="https://your-project-default-rtdb.firebaseio.com" /></label>' +
+        '<button class="btn primary wide" data-action="sync-link">Use this copy</button>';
+    }
+
+    html += '</section>';
+    return html;
+  }
+
+  function startSync() {
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) return;
+      refreshSyncUI();
+      if (syncReady()) syncNow("auto");
+    });
+
+    window.addEventListener("online", function () {
+      if (syncReady()) syncNow("auto");
+    });
+
+    if (syncReady()) syncNow("start");
+  }
+
   /* ---------------- init ---------------- */
   function init() {
     const startTab = String(window.location.hash || "").replace("#", "");
@@ -2240,6 +2666,7 @@
     }
 
     render();
+    startSync();
   }
 
   if (document.readyState === "loading") {
