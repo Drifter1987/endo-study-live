@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f16" />
+  <title>Endo Study — app tour</title>
+  <link rel="stylesheet" href="tour.css" />
+</head>
+<body>
+  <div class="tour">
+
+    <header class="tour-head">
+      <a class="back" href="index.html">&#8249; App</a>
+      <div class="tour-title">App tour</div>
+      <div class="tour-clock" id="clock">0:00 / 2:00</div>
+    </header>
+
+    <div class="bar"><div class="bar-fill" id="bar-fill"></div></div>
+
+    <div class="stage">
+      <div class="phone">
+        <div class="screen" id="screen">
+
+          <!-- 1 - intro -->
+          <section class="scene scene-center" data-name="Introduction" data-dur="7"
+            data-caption="This is Endo Study — the endocrinology in-training exam, on your phone, in one place.">
+            <div class="intro">
+              <span class="intro-dot" data-at="0.2"></span>
+              <h1 class="intro-title" data-at="0.7">Endo Study</h1>
+              <p class="intro-sub" data-at="1.5">The endocrine in&#8209;training exam, in one place</p>
+              <ul class="intro-list">
+                <li data-at="2.4">144 questions with answers</li>
+                <li data-at="3.2">8 blueprint areas</li>
+                <li data-at="4.0">A plan to January</li>
+              </ul>
+            </div>
+          </section>
+
+          <!-- 2 - today -->
+          <section class="scene" data-name="Today" data-dur="15" data-tab="today"
+            data-caption="Today is the screen you open each morning: a countdown, your streak, and one button that starts today's questions.">
+            <div class="scr-top">
+              <span class="scr-dot"></span><b>Endo Study</b>
+              <span class="scr-meta">127 days left</span>
+            </div>
+            <div class="scr-body">
+              <div class="mini-card" data-at="0.4">
+                <div class="mini-k">Your exam</div>
+                <div class="mini-big">127 days</div>
+                <div class="mini-sub">15 January 2027 · ESAP / ITE</div>
+              </div>
+              <div class="mini-row" data-at="1.3">
+                <span class="chip ok">&#9679; 6-day streak</span>
+                <span class="chip">10 new left today</span>
+              </div>
+              <div class="mini-btn" data-at="2.2">Start today's questions</div>
+              <div class="mini-fine" data-at="2.9">10 new + 4 due reviews</div>
+              <div class="mini-fold" data-at="4.2">Overview <span>&#9662;</span></div>
+              <div class="mini-fold-row" data-at="5.0"><span>Study plan</span><span class="mini-sub">3 phases</span></div>
+              <div class="mini-fold-row" data-at="5.6"><span>Blueprint coverage</span><span class="mini-sub">120 + 24</span></div>
+              <div class="mini-fold-row" data-at="6.2"><span>Review load</span><span class="mini-sub">4 due</span></div>
+              <div class="mini-fold-row" data-at="6.8"><span>Reading list</span><span class="mini-sub">4 of 10</span></div>
+            </div>
+            <div class="scr-tabs"></div>
+          </section>
+
+          <!-- 3 - the plan -->
+          <section class="scene" data-name="The plan" data-dur="13" data-tab="today"
+            data-caption="Everything else on Today lives in one Overview card. Open the study plan and you get three dated phases: cover the bank, weak areas, then mock season.">
+            <div class="scr-top">
+              <span class="scr-dot"></span><b>Study plan</b>
+              <span class="scr-meta">from your exam date</span>
+            </div>
+            <div class="scr-body">
+              <div class="mini-phase" data-at="0.5">
+                <div class="mini-phase-top"><b>1 · Cover the bank</b><span>55%</span></div>
+                <div class="pbar"><i class="pbar-fill" style="width:72%"></i></div>
+                <div class="mini-sub">To 5 Nov · 10 new a day, one reading a week</div>
+              </div>
+              <div class="mini-phase" data-at="1.6">
+                <div class="mini-phase-top"><b>2 · Weak areas</b><span>30%</span></div>
+                <div class="pbar"><i class="pbar-fill" style="width:18%"></i></div>
+                <div class="mini-sub">Only sections under 60% · guideline, chapter, re-test</div>
+              </div>
+              <div class="mini-phase" data-at="2.7">
+                <div class="mini-phase-top"><b>3 · Mock season</b><span>15%</span></div>
+                <div class="pbar"><i class="pbar-fill" style="width:4%"></i></div>
+                <div class="mini-sub">One 40-question timed mock a week</div>
+              </div>
+              <div class="mini-fine" data-at="4.2">Move the exam date and all three phases move with it.</div>
+            </div>
+            <div class="scr-tabs"></div>
+          </section>
+
+          <!-- 4 - study -->
+          <section class="scene" data-name="Study" data-dur="14" data-tab="study"
+            data-caption="In Study you pick an area and a length, then answer one question at a time: a real case, five options, one best answer.">
+            <div class="scr-top">
+              <span class="scr-dot"></span><b>Study</b>
+              <span class="scr-meta">question 1 of 15</span>
+            </div>
+            <div class="scr-body">
+              <div class="mini-chips" data-at="0.4">
+                <span class="chip on">Diabetes</span>
+                <span class="chip">Thyroid</span>
+                <span class="chip">Bone</span>
+                <span class="chip">Adrenal</span>
+              </div>
+              <div class="mini-card" data-at="1.3">
+                <div class="mini-k">Diabetes · question 1 of 15</div>
+                <div class="mini-stem">A 54-year-old with type 2 diabetes on metformin has an eGFR of 38 with albuminuria. Which addition best slows progression?</div>
+              </div>
+              <div class="opt" data-at="2.4"><span>A</span>Increase metformin</div>
+              <div class="opt mark" data-at="3.0"><span>B</span>Add an SGLT2 inhibitor</div>
+              <div class="opt" data-at="3.5"><span>C</span>Add a sulfonylurea</div>
+              <div class="opt" data-at="4.0"><span>D</span>Start basal insulin</div>
+              <div class="opt" data-at="4.5"><span>E</span>Stop all oral agents</div>
+            </div>
+            <div class="scr-tabs"></div>
+          </section>
+
+          <!-- 5 - grading -->
+          <section class="scene" data-name="Grading" data-dur="13" data-tab="study"
+            data-caption="Then grade yourself honestly — Again, Hard, Good or Easy. The app brings each question back just before you would forget it.">
+            <div class="scr-top">
+              <span class="scr-dot"></span><b>Study</b>
+              <span class="scr-meta">1 of 15</span>
+            </div>
+            <div class="scr-body">
+              <div class="mini-ans" data-at="0.4">Correct — B</div>
+              <div class="mini-why" data-at="1.1">SGLT2 inhibitors slow the decline in eGFR in CKD with albuminuria, independently of glucose control.</div>
+              <div class="mini-k" data-at="1.9">How did that feel?</div>
+              <div class="mini-grade" data-at="2.4">
+                <span class="g g-again">Again</span>
+                <span class="g g-hard">Hard</span>
+                <span class="g g-good">Good</span>
+                <span class="g g-easy">Easy</span>
+              </div>
+              <div class="mini-next" data-at="3.6">Back in 6 days · the gap grows with every Good</div>
+              <div class="mini-fine" data-at="4.6">Every answer is scheduled, so nothing is studied twice for nothing.</div>
+            </div>
+            <div class="scr-tabs"></div>
+          </section>
+
+          <!-- 6 - mock -->
+          <section class="scene" data-name="Timed mock" data-dur="11" data-tab="study"
+            data-caption="The timed mock gives forty blueprint-weighted questions and starts a clock: two and a half minutes each, the pace of the real exam.">
+            <div class="scr-top">
+              <span class="scr-dot"></span><b>Timed mock</b>
+              <span class="scr-meta mini-clock" id="mock-clock">01:32:10</span>
+            </div>
+            <div class="scr-body">
+              <div class="mini-row" data-at="0.4">
+                <span class="chip">Question 12 of 40</span>
+                <span class="chip ok">Answered 11</span>
+              </div>
+              <div class="mini-card" data-at="1.2">
+                <div class="mini-k">Thyroid · question 12</div>
+                <div class="mini-stem">A 31-year-old with Graves disease is 8 weeks pregnant and thyrotoxic. Which treatment is correct?</div>
+              </div>
+              <div class="opt" data-at="2.4"><span>A</span>Radioiodine now</div>
+              <div class="opt" data-at="2.9"><span>B</span>Propylthiouracil</div>
+              <div class="opt" data-at="3.4"><span>C</span>Methimazole 20 mg</div>
+              <div class="opt" data-at="3.9"><span>D</span>Total thyroidectomy now</div>
+              <div class="opt" data-at="4.4"><span>E</span>Observation only</div>
+              <div class="mini-fine" data-at="5.0">All 144 questions available · a summary with every miss at the end</div>
+            </div>
+            <div class="scr-tabs"></div>
+          </section>
+
+          <!-- 7 - questions -->
+          <section class="scene" data-name="Questions" data-dur="12" data-tab="bank"
+            data-caption="Questions is the whole bank in one searchable list. Filter by area, due, new or flagged, then open any item to read the answer, flag it, edit it or delete it.">
+            <div class="scr-top">
+              <span class="scr-dot"></span><b>Questions</b>
+              <span class="scr-meta">120 ESAP + 24 written</span>
+            </div>
+            <div class="scr-body">
+              <div class="mini-search" data-at="0.4">Search all 144 questions</div>
+              <div class="mini-chips" data-at="1.0">
+                <span class="chip on">All</span>
+                <span class="chip">Due</span>
+                <span class="chip">New</span>
+                <span class="chip">Flagged</span>
+              </div>
+              <div class="mini-line" data-at="1.7"><b>ESAP 24</b><span class="tag">Thyroid</span><i class="mini-badge due">due</i></div>
+              <div class="mini-line" data-at="2.2"><b>ESAP 25</b><span class="tag">Bone</span><i class="mini-badge new">new</i></div>
+              <div class="mini-line" data-at="2.7"><b>ESAP 26</b><span class="tag">Adrenal</span><i class="mini-badge flag">flagged</i></div>
+              <div class="mini-line" data-at="3.2"><b>Written 7</b><span class="tag">Lipids</span><i class="mini-badge new">new</i></div>
+              <div class="mini-fine" data-at="4.4">Every item keeps its five options and the answer key.</div>
+            </div>
+            <div class="scr-tabs"></div>
+          </section>
+
+          <!-- 8 - learn -->
+          <section class="scene" data-name="Learn" data-dur="14" data-tab="learn"
+            data-caption="Learn is the reading list: ten free sources, each saying what it is and exactly which chapters to read. Tick Mark done when you finish — nothing is scheduled.">
+            <div class="scr-top">
+              <span class="scr-dot"></span><b>Learn</b>
+              <span class="scr-meta">4 of 10 done</span>
+            </div>
+            <div class="scr-body">
+              <div class="mini-title" data-at="0.3">Reading list</div>
+              <div class="pbar" data-at="0.7"><i class="pbar-fill" style="width:40%"></i></div>
+              <div class="mini-card" data-at="1.4">
+                <div class="mini-k">ADA Standards of Care 2026</div>
+                <div class="mini-sub">The diabetes reference · free · 4 chapters</div>
+                <div class="mini-fold">What to read <span>&#9662;</span></div>
+              </div>
+              <div class="mini-card" data-at="2.4">
+                <div class="mini-k">ATA guideline index</div>
+                <div class="mini-sub">Pregnancy, DTC, hyper and hypothyroidism</div>
+              </div>
+              <div class="mini-btn ghost" data-at="3.2">Mark done</div>
+              <div class="mini-fine" data-at="4.4">No daily reading target — read when you have the hour.</div>
+            </div>
+            <div class="scr-tabs"></div>
+          </section>
+
+          <!-- 9 - more -->
+          <section class="scene" data-name="More" data-dur="12" data-tab="more"
+            data-caption="More holds the settings: the exam date that moves every plan date, your daily limit, the mock size, and a backup for moving to another phone.">
+            <div class="scr-top">
+              <span class="scr-dot"></span><b>More</b>
+              <span class="scr-meta">settings</span>
+            </div>
+            <div class="scr-body">
+              <div class="mini-card" data-at="0.4">
+                <div class="mini-rowline"><span>Exam date</span><b>15 Jan 2027</b></div>
+                <div class="mini-rowline"><span>New questions a day</span><b>10</b></div>
+                <div class="mini-rowline"><span>Mock</span><b>40 Q · 100 min</b></div>
+              </div>
+              <div class="mini-fold" data-at="1.8">Backup and restore <span>&#9662;</span></div>
+              <div class="mini-fold" data-at="2.4">Quick lab reference <span>&#9662;</span></div>
+              <div class="mini-fold" data-at="3.0">Bank status · 120 + 24 <span>&#9662;</span></div>
+              <div class="mini-fold" data-at="3.6">How this app works <span>&#9662;</span></div>
+              <div class="mini-fine" data-at="4.8">Progress is stored on the phone only — export before switching device.</div>
+            </div>
+            <div class="scr-tabs"></div>
+          </section>
+
+          <!-- 10 - outro -->
+          <section class="scene scene-center" data-name="That's it" data-dur="8"
+            data-caption="That is the whole app. One question a day, tracked until January.">
+            <div class="intro">
+              <span class="intro-dot" data-at="0.2"></span>
+              <h1 class="intro-title" data-at="0.7">A question a day</h1>
+              <p class="intro-sub" data-at="1.5">144 questions · 8 areas · one plan to January</p>
+              <a class="intro-cta" href="index.html" data-at="2.4">Open the app</a>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="chapters" id="chapters"></div>
+
+    <div class="caption-wrap">
+      <h2 class="chapter-name" id="chapter-name">Introduction</h2>
+      <p class="caption" id="caption"></p>
+    </div>
+
+    <div class="controls">
+      <button class="ctrl" id="play" aria-label="Pause">&#10074;&#10074;</button>
+      <button class="ctrl" id="restart" aria-label="Restart">&#8635;</button>
+    </div>
+
+  </div>
+
+  <script src="tour.js"></script>
+</body>
+</html>
