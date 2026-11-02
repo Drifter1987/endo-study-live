@@ -26,6 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
+  const BUILD = "20261103a";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -1544,7 +1545,8 @@
       '<p class="muted small" style="margin:0 0 8px"><b>Study</b> gives you a question, its answer and a short explanation, then asks how it felt. The app decides when to show it again.</p>' +
       '<p class="muted small" style="margin:0 0 8px"><b>Questions</b> lists all 144 so you can look one up, flag it, or read the explanation without grading yourself.</p>' +
       '<p class="muted small" style="margin:0 0 8px"><b>Learn</b> is a short reading list with the exact sections to read in each source.</p>' +
-      '<p class="muted small" style="margin:0">Your progress is saved on this device only — export a backup before switching phones.</p>' +
+      '<p class="muted small" style="margin:0">Your progress is saved on this device, and to the shared copy while it is on.</p>' +
+      '<p class="muted small" style="margin:8px 0 0">Build ' + esc(BUILD) + '</p>' +
       '<p class="center" style="margin:12px 0 0"><a class="tour-link" href="tour.html">&#9654; Watch the app tour</a></p>' +
       '</details>';
 
