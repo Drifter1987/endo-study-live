@@ -2125,6 +2125,7 @@
       s.lastError = "";
       persist();
       syncNow("manual");
+      startLiveFeed();
       render();
       return;
     }
@@ -2138,6 +2139,7 @@
       s.off = true;
       s.lastError = "";
       s.lastSyncAt = 0;
+      stopLiveFeed();
       persist();
       render();
       toast("This device is on its own now");
@@ -2628,18 +2630,102 @@
     return html;
   }
 
+  /* While the app is open it listens to the database, so a change made on one
+     phone lands on the other within a second or two rather than at the next
+     reload. If the stream is unavailable it falls back to polling. */
+  let liveFeed = null;
+  let pollTimer = null;
+
+  function stopLiveFeed() {
+    if (liveFeed) {
+      try { liveFeed.close(); } catch (e) { /* already gone */ }
+      liveFeed = null;
+    }
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function onLiveEvent(ev) {
+    let msg = null;
+    try { msg = JSON.parse(ev.data); } catch (e) { return; }
+    if (!msg) return;
+
+    if (msg.path && msg.path !== "/") {
+      pullOnly();
+      return;
+    }
+    if (!msg.data) return;
+
+    if (mergeRemote(msg.data)) softRender();
+    refreshSyncUI();
+  }
+
+  function startLiveFeed() {
+    stopLiveFeed();
+    if (!syncReady() || document.hidden) return;
+
+    if (typeof EventSource === "undefined") {
+      startPolling();
+      return;
+    }
+
+    try {
+      liveFeed = new EventSource(statePath());
+    } catch (e) {
+      startPolling();
+      return;
+    }
+
+    liveFeed.addEventListener("put", onLiveEvent);
+    liveFeed.addEventListener("patch", onLiveEvent);
+    liveFeed.onerror = function () {
+      /* the browser retries a dropped stream on its own; poll meanwhile */
+      startPolling();
+    };
+  }
+
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(function () {
+      if (document.hidden || syncBusy) return;
+      pullOnly();
+    }, 12000);
+  }
+
+  async function pullOnly() {
+    try {
+      const remote = await syncReadRemote();
+      if (remote && mergeRemote(remote)) {
+        softRender();
+        refreshSyncUI();
+      }
+    } catch (e) { /* stay quiet: the save path reports real errors */ }
+  }
+
   function startSync() {
     document.addEventListener("visibilitychange", function () {
-      if (document.hidden) return;
+      if (document.hidden) {
+        stopLiveFeed();
+        return;
+      }
       refreshSyncUI();
-      if (syncReady()) syncNow("auto");
+      if (!syncReady()) return;
+      syncNow("auto");
+      startLiveFeed();
     });
 
     window.addEventListener("online", function () {
-      if (syncReady()) syncNow("auto");
+      if (!syncReady()) return;
+      syncNow("auto");
+      startLiveFeed();
     });
 
-    if (syncReady()) syncNow("start");
+    if (syncReady()) {
+      syncNow("start");
+      startLiveFeed();
+    }
   }
 
   /* ---------------- init ---------------- */
