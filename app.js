@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104e";
+  const BUILD = "20261104f";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -696,6 +696,14 @@
       d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   }
 
+  function historyCategoryHtml(id) {
+    const name = sectionName(id);
+    const words = name.split(/\s+/);
+    if (words.length < 2) return esc(name);
+    const splitAt = Math.ceil(words.length / 2);
+    return esc(words.slice(0, splitAt).join(" ")) + "<br>" + esc(words.slice(splitAt).join(" "));
+  }
+
   function historyHtml() {
     const list = state.history || [];
     if (!list.length) {
@@ -726,8 +734,8 @@
 
         html += '<div class="hist-item">' +
           '<div class="hist-head" data-action="hist-toggle">' +
-          '<span class="tag">' + esc(sectionName(it.section)) + '</span>' +
-          '<span class="snippet">' + esc(firstWords(it.vignette, 5)) + '</span>' +
+          '<span class="tag history-category">' + historyCategoryHtml(it.section) + '</span>' +
+          '<span class="snippet">' + esc(firstWords(it.vignette, 2)) + '</span>' +
           '<span class="mark ' + (it.correct ? "ok" : "no") + '">' + (it.correct ? "✓" : "✗") + '</span>' +
           cardButton(it.id) +
           '</div>' +

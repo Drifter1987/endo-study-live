@@ -1113,3 +1113,13 @@ h2, .h2, .btn, .option, .chip, .tag, .toast { color: inherit; }
 
 .hist-item .hist-body { display: none; padding-bottom: 10px; }
 .hist-item.open .hist-body { display: block; border-top: 1px solid var(--line); padding-top: 10px; }
+
+
+
+.hist-head .history-category {
+  flex: 0 0 auto;
+  max-width: 118px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
+}
