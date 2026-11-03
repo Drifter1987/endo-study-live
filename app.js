@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261103b";
+  const BUILD = "20261104a";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -396,24 +396,19 @@
     }).length;
   }
 
-  /* What a session would actually serve right now: reviews that are due, plus
-     unseen cards up to the daily cap (unless the cap is being ignored). */
+  /* What is left: unseen cards (what a session serves, capped by the daily
+     limit) and how many have been answered at least once. */
   function dueCounts() {
-    const today = todayKey();
-    let reviewsDue = 0;
     let fresh = 0;
+    let answered = 0;
     let flagged = 0;
     let seen = 0;
     let solid = 0;
 
     state.questions.forEach(function (q) {
       const p = prog(q.id);
-      const doneToday = p.day === today && !p.repeatToday;
-      if (p.reps === 0) {
-        if (!doneToday) fresh++;
-      } else if (p.due <= today && !doneToday) {
-        reviewsDue++;
-      }
+      if (p.attempts === 0) fresh++;
+      else answered++;
       if (p.reps > 0) seen++;
       if (p.interval >= 21) solid++;
       if (p.flagged) flagged++;
@@ -425,14 +420,29 @@
     const newToday = Math.min(fresh, room);
 
     return {
-      reviewsDue: reviewsDue,
       fresh: fresh,
+      answered: answered,
       flagged: flagged,
       seen: seen,
       solid: solid,
       room: room,
       newToday: newToday,
-      due: reviewsDue + newToday
+      total: state.questions.length,
+      due: newToday
+    };
+  }
+
+  /* How much of the bank has been answered at least once. */
+  function progressState() {
+    const total = state.questions.length;
+    const answered = state.questions.filter(function (q) {
+      return prog(q.id).attempts > 0;
+    }).length;
+    return {
+      total: total,
+      answered: answered,
+      pct: total ? Math.round((answered / total) * 100) : 0,
+      finished: total > 0 && answered >= total
     };
   }
 
@@ -521,7 +531,7 @@
   const ui = {
     tab: "today",
     section: "all",
-    dueOnly: true,
+    mode: "new",
     size: 20,
     ignoreLimit: false,
     learnFilter: "all",
@@ -595,7 +605,6 @@
     const total = qs.length;
 
     const counts = dueCounts();
-    const due = counts.due;
     const fresh = counts.fresh;
     const flagged = counts.flagged;
     const seen = counts.seen;
@@ -629,23 +638,39 @@
     html += '</section>';
 
     /* today's work */
+    const notYet = Math.max(0, total - counts.answered);
+    const allDone = total > 0 && counts.answered >= total;
+    const unseenNow = counts.newToday;
+
+    let primaryBtn;
+    if (unseenNow > 0) {
+      primaryBtn = '<button class="btn primary wide" data-action="quick-start">Start today\'s session · ' +
+        (ui.size > 0 ? Math.min(unseenNow, ui.size) : unseenNow) + ' new</button>';
+    } else if (allDone) {
+      primaryBtn = '<button class="btn primary wide" data-action="quick-repeat">Repeat the full bank · ' +
+        total + ' questions</button>';
+    } else if (counts.answered > 0) {
+      primaryBtn = '<button class="btn primary wide" data-action="quick-catchup">Catch up on answered · ' +
+        (ui.size > 0 ? Math.min(counts.answered, ui.size) : counts.answered) + ' questions</button>';
+    } else {
+      primaryBtn = '<button class="btn primary wide" data-action="quick-start">Nothing left in this section</button>';
+    }
+
+    const catchupBtn = (counts.answered > 0 && unseenNow > 0)
+      ? '<button class="btn ghost wide" data-action="quick-catchup">Catch up on answered · ' + counts.answered + '</button>'
+      : '';
+
     html += '<section class="card">' +
       '<div class="row between"><h3 style="margin:0">Today</h3>' +
-      '<span class="muted small">' + (room > 0 ? room + " new left" : "new limit reached") + '</span></div>' +
+      '<span class="muted small">' +
+      (allDone ? "bank finished" : room > 0 ? room + " new left today" : "daily limit reached") + '</span></div>' +
       '<div class="row" style="margin:12px 0 14px">' +
-      '<div class="stat"><b>' + due + '</b><span>due now</span></div>' +
-      '<div class="stat"><b>' + fresh + '</b><span>never seen</span></div>' +
+      '<div class="stat"><b>' + notYet + '</b><span>not yet answered</span></div>' +
+      '<div class="stat"><b>' + counts.answered + '</b><span>answered</span></div>' +
       '<div class="stat"><b>' + flagged + '</b><span>flagged</span></div>' +
       '</div>' +
-      '<div class="stack">' +
-      '<button class="btn primary wide" data-action="quick-start">' +
-      (due > 0
-        ? "Start today's session · " + (ui.size > 0 ? Math.min(due, ui.size) : due) + " cards"
-        : "Start today's session") + '</button>' +
-      (due === 0 && fresh > 0
-        ? '<button class="btn wide" data-action="quick-start-more">Study more new cards (' + fresh + ' unseen)</button>'
-        : '') +
-      '<button class="btn ghost wide" style="margin-top:8px" data-action="start-mock">' + mockLabel() + '</button>' +
+      '<div class="stack">' + primaryBtn + catchupBtn +
+      '<button class="btn ghost wide" data-action="start-mock">' + mockLabel() + '</button>' +
       '</div></section>';
 
     /* study plan, coverage, load and reading, folded away */
@@ -725,10 +750,35 @@
     });
 
     const dueState = dueCounts();
-    const dueAll = dueState.due;
     const fresh = dueState.fresh;
 
     let html = '<h2>Study</h2>';
+
+    const ps = progressState();
+    const mode = ui.mode || "new";
+    const unseen = Math.max(0, ps.total - ps.answered);
+
+    let modeLine;
+    if (mode === "catchup") {
+      modeLine = "Only questions you have already answered, weakest first. This is the catch-up pass.";
+    } else if (mode === "full") {
+      modeLine = "The whole bank again in a fresh order, as a full run.";
+    } else {
+      modeLine = "Only questions you have never answered. Once answered, a card stays out of the way until you ask to catch up or repeat.";
+    }
+
+    html += '<section class="card">' +
+      '<div class="row between"><h3 style="margin:0">What to study</h3>' +
+      '<span class="muted small">' + ps.answered + ' of ' + ps.total + ' answered · ' + ps.pct + '%</span></div>' +
+      '<div class="chips" style="margin-top:10px">' +
+      '<button class="chip' + (mode === "new" ? " on" : "") + '" data-action="pick-mode" data-mode="new">New (' + unseen + ')</button>' +
+      '<button class="chip' + (mode === "catchup" ? " on" : "") + '" data-action="pick-mode" data-mode="catchup">Catch up (' + ps.answered + ')</button>' +
+      '<button class="chip' + (mode === "full" ? " on" : "") + (ps.finished ? "" : " disabled") +
+      '" data-action="pick-mode" data-mode="full">Full repeat</button>' +
+      '</div>' +
+      '<div class="bar" style="margin-top:12px"><i style="width:' + ps.pct + '%"></i></div>' +
+      '<p class="muted small" style="margin:10px 0 0">' + modeLine + '</p>' +
+      '</section>';
 
     html += '<section class="card"><h3>Section</h3><div class="chips">' +
       '<button class="chip' + (ui.section === "all" ? " on" : "") + '" data-action="pick-section" data-section="all">' +
@@ -744,8 +794,7 @@
       [10, 20, 40].map(function (n) {
         return '<button class="chip' + (ui.size === n ? " on" : "") + '" data-action="pick-size" data-size="' + n + '">' + n + '</button>';
       }).join("") +
-      '<button class="chip' + (ui.size === 0 ? " on" : "") + '" data-action="pick-size" data-size="0">All due</button>' +
-      '<button class="chip' + (ui.dueOnly ? " on" : "") + '" data-action="toggle-due">Only due now (' + dueAll + ')</button>' +
+      '<button class="chip' + (ui.size === 0 ? " on" : "") + '" data-action="pick-size" data-size="0">Full set</button>' +
       '</div>';
 
     html += '<p class="muted small" style="margin:14px 0 0">New today: ' + newDoneToday() + ' used of ' +
@@ -754,13 +803,15 @@
       '<button class="chip' + (ui.ignoreLimit ? " on" : "") + '" data-action="toggle-limit">Ignore daily cap</button>' +
       '</div>';
 
+    const modeName = mode === "catchup" ? "catch up" : mode === "full" ? "full repeat" : "new questions";
+
     html += '<div class="stack" style="margin-top:16px">' +
-      '<button class="btn primary wide" data-action="start-practice">Start practice · ' +
+      '<button class="btn primary wide" data-action="start-practice">Start ' + modeName + ' · ' +
       esc(ui.section === "all" ? "all sections" : sectionName(ui.section)) + ' · ' + sessionSizeLabel() + '</button>' +
       '<button class="btn ghost wide" data-action="start-mock">' + mockLabel() + '</button>' +
       '</div>';
 
-    html += '<p class="muted small" style="margin:12px 0 0">Practice shows the answer and explanation immediately and schedules the card. The mock hides feedback until the end and schedules every missed question for tomorrow — it draws on the whole bank at the blueprint weights.</p>';
+    html += '<p class="muted small" style="margin:12px 0 0">Practice shows the answer and explanation immediately. The mock hides feedback until the end and draws on the whole bank at the blueprint weights.</p>';
     html += '</section>';
 
     html += '<details class="fold card"><summary>Your progress</summary>' + renderStats() + '</details>';
@@ -772,60 +823,74 @@
   function startPractice() {
     const today = todayKey();
     const sec = ui.section;
+    const mode = ui.mode || "new";
 
     const allInSection = state.questions.filter(function (q) {
       return sec === "all" || q.section === sec;
     });
 
-    let pool = ui.dueOnly
-      ? allInSection.filter(function (q) { return prog(q.id).due <= today; })
-      : allInSection;
+    let pool;
 
-    /* A card answered today does not come back in a later session today, unless
-       it was graded "Again", which deliberately brings it round once more. */
-    pool = pool.filter(function (q) {
-      const p = prog(q.id);
-      return !(p.day === today && !p.repeatToday);
-    });
-
-    const reviews = pool.filter(function (q) { return prog(q.id).reps > 0; })
-      .sort(function (a, b) { return prog(a.id).due.localeCompare(prog(b.id).due); });
-
-    let news = pool.filter(function (q) { return prog(q.id).reps === 0; });
-    if (ui.dueOnly && !ui.ignoreLimit) {
-      const room = Math.max(0, (state.settings.dailyNew || 0) - newDoneToday());
-      news = news.slice(0, room);
+    if (mode === "catchup") {
+      /* only questions already answered, weakest first, then longest overdue */
+      pool = allInSection.filter(function (q) {
+        const p = prog(q.id);
+        return p.attempts > 0 && !(p.day === today && !p.repeatToday);
+      });
+      pool.sort(function (a, b) {
+        const pa = prog(a.id);
+        const pb = prog(b.id);
+        const ra = pa.attempts ? pa.correct / pa.attempts : 1;
+        const rb = pb.attempts ? pb.correct / pb.attempts : 1;
+        if (ra !== rb) return ra - rb;
+        return String(pa.due).localeCompare(String(pb.due));
+      });
+    } else if (mode === "full") {
+      /* the whole bank again, in a fresh order */
+      pool = shuffle(allInSection);
+    } else {
+      /* only questions that have never been answered */
+      pool = allInSection.filter(function (q) { return prog(q.id).attempts === 0; });
+      if (!ui.ignoreLimit) {
+        const room = Math.max(0, (state.settings.dailyNew || 0) - newDoneToday());
+        pool = pool.slice(0, room);
+      }
     }
 
-    let queue = reviews.concat(news);
+    let queue = pool;
     if (ui.size > 0) queue = queue.slice(0, ui.size);
 
     if (!queue.length) {
-      const unseen = allInSection.filter(function (q) { return prog(q.id).reps === 0; }).length;
-      const laterReviews = allInSection.filter(function (q) { return prog(q.id).reps > 0; }).length;
+      const ps = progressState();
 
-      if (!ui.ignoreLimit && unseen) {
-        const ok = window.confirm("Today's new-card cap is used up, but " + unseen +
-          " questions are still unseen. Keep going?");
-        if (ok) {
-          ui.ignoreLimit = true;
-          startPractice();
+      if (mode === "new") {
+        if (ps.answered > 0 && ps.answered >= ps.total) {
+          if (window.confirm("You have answered all " + ps.total + " questions. Repeat the full bank?")) {
+            ui.mode = "full";
+            startPractice();
+          }
+        } else if (!ui.ignoreLimit && ps.total > ps.answered) {
+          if (window.confirm("Today's new-card limit is used up. Keep going with new questions?")) {
+            ui.ignoreLimit = true;
+            startPractice();
+          }
+        } else if (ps.answered > 0) {
+          if (window.confirm("No new questions left in this section. Catch up on the ones you have answered?")) {
+            ui.mode = "catchup";
+            startPractice();
+          }
+        } else {
+          toast("No questions in this section");
         }
         return;
       }
-      if (!ui.dueOnly && laterReviews) {
-        toast("Only cards scheduled for later are left in this section");
+
+      if (mode === "catchup") {
+        toast("Nothing answered in this section yet");
         return;
       }
-      if (laterReviews && ui.dueOnly) {
-        const ok = window.confirm("Nothing is due today. Study cards scheduled for later anyway?");
-        if (ok) {
-          ui.dueOnly = false;
-          startPractice();
-        }
-        return;
-      }
-      toast("Nothing to study with these filters");
+
+      toast("Nothing to study");
       return;
     }
 
@@ -1087,6 +1152,7 @@
 
     html += '<div class="stack">' +
       '<button class="btn primary wide" data-action="another-session">Study another session</button>' +
+      (progressState().finished ? '<button class="btn ghost wide" data-action="quick-repeat">Repeat the full bank</button>' : '') +
       (missed.length ? '<button class="btn ghost wide" data-action="study-missed">Study missed again</button>' : '') +
       '<button class="btn ghost wide" data-action="end-session">Done — back to Today</button>' +
       '</div>';
@@ -1339,8 +1405,8 @@
   }
 
   function sessionSizeLabel() {
-    if (ui.size === 0) return "everything due";
-    return ui.dueOnly ? "up to " + ui.size + " questions" : ui.size + " questions";
+    if (ui.size === 0) return "the whole set";
+    return ui.size + " questions";
   }
 
   function esapLoadedCount() {
@@ -1895,19 +1961,36 @@
       render();
       return;
     }
-    if (action === "toggle-due") {
-      ui.dueOnly = !ui.dueOnly;
-      render();
-      return;
-    }
     if (action === "toggle-limit") {
       ui.ignoreLimit = !ui.ignoreLimit;
       render();
       return;
     }
+    if (action === "pick-mode") {
+      const next = el.dataset.mode;
+      if (next === "full" && !progressState().finished) {
+        toast("Full repeat opens once every question has been answered");
+        return;
+      }
+      ui.mode = next;
+      render();
+      return;
+    }
     if (action === "quick-start") {
       ui.section = "all";
-      ui.dueOnly = true;
+      ui.mode = "new";
+      startPractice();
+      return;
+    }
+    if (action === "quick-catchup") {
+      ui.section = "all";
+      ui.mode = "catchup";
+      startPractice();
+      return;
+    }
+    if (action === "quick-repeat") {
+      ui.section = "all";
+      ui.mode = "full";
       startPractice();
       return;
     }
@@ -1930,13 +2013,13 @@
     }
     if (action === "quick-start-more") {
       ui.section = "all";
-      ui.dueOnly = true;
+      ui.mode = "new";
       ui.ignoreLimit = true;
       startPractice();
       return;
     }
     if (action === "another-session") {
-      ui.dueOnly = true;
+      ui.mode = "new";
       startPractice();
       return;
     }

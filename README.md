@@ -11,10 +11,12 @@ browser's localStorage on this device.
 - **Today** — exam countdown and streak, today's session (one button), then a single
   **Overview** card holding study plan, blueprint coverage, review load and the reading list as
   collapsed folds. Nothing else.
-- **Study** — practice. Pick a section, pick a length, answer, then mark yourself Again / Hard /
-  Good / Easy; the app schedules the card. The same screen holds **Your progress** (accuracy,
-  by section, weakest questions, answers per day) in a fold, so there is no separate Stats tab.
-  The timed mock gives 40 blueprint-weighted questions with a clock.
+- **Study** — practice. Pick **New**, **Catch up** or **Full repeat**, pick a section and a length,
+  answer, then mark yourself Again / Hard / Good / Easy. A question you have answered stays out of
+  the queue — it only comes back if you choose **Catch up** (weakest first) or, once all 144 are
+  answered, **Full repeat**. The same screen holds **Your progress** (accuracy, by section, weakest
+  questions, answers per day) in a fold, so there is no separate Stats tab. The timed mock gives 40
+  blueprint-weighted questions with a clock.
 - **Questions** — all 144 in one searchable list: filter by section, due, new or flagged; open
   one to read the answer and explanation; flag, edit or delete.
 - **Learn** — the reading list. Each card shows what the source is; the exact sections to read
