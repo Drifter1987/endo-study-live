@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261103a";
+  const BUILD = "20261103b";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -370,7 +370,9 @@
         flagged: false,
         last: null,
         lastGrade: null,
-        firstSeen: null
+        firstSeen: null,
+        day: null,
+        repeatToday: false
       };
       state.progress[id] = p;
     }
@@ -406,8 +408,12 @@
 
     state.questions.forEach(function (q) {
       const p = prog(q.id);
-      if (p.reps === 0) fresh++;
-      else if (p.due <= today) reviewsDue++;
+      const doneToday = p.day === today && !p.repeatToday;
+      if (p.reps === 0) {
+        if (!doneToday) fresh++;
+      } else if (p.due <= today && !doneToday) {
+        reviewsDue++;
+      }
       if (p.reps > 0) seen++;
       if (p.interval >= 21) solid++;
       if (p.flagged) flagged++;
@@ -460,6 +466,9 @@
     p.attempts += 1;
     if (correct) p.correct += 1;
     if (wasNew) p.firstSeen = todayKey();
+    /* used to keep a card out of later sessions on the same day */
+    p.day = todayKey();
+    p.repeatToday = false;
     bumpDay(wasNew);
     state.totalAnswered += 1;
   }
@@ -503,6 +512,8 @@
     if (!p.firstSeen) p.firstSeen = today;
     p.last = today;
     p.lastGrade = grade;
+    p.day = today;
+    p.repeatToday = (grade === "again");
     save();
   }
 
@@ -769,6 +780,13 @@
     let pool = ui.dueOnly
       ? allInSection.filter(function (q) { return prog(q.id).due <= today; })
       : allInSection;
+
+    /* A card answered today does not come back in a later session today, unless
+       it was graded "Again", which deliberately brings it round once more. */
+    pool = pool.filter(function (q) {
+      const p = prog(q.id);
+      return !(p.day === today && !p.repeatToday);
+    });
 
     const reviews = pool.filter(function (q) { return prog(q.id).reps > 0; })
       .sort(function (a, b) { return prog(a.id).due.localeCompare(prog(b.id).due); });
@@ -2782,6 +2800,22 @@
     }
   }
 
+  /* ---------------- theme ---------------- */
+  function currentTheme() {
+    return document.documentElement.getAttribute("data-theme") || "light";
+  }
+
+  function applyTheme(next) {
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("endo-theme", next); } catch (e) { /* private mode */ }
+    const btn = document.getElementById("theme-toggle");
+    if (btn) btn.textContent = next === "light" ? "☾" : "☀";
+  }
+
+  function toggleTheme() {
+    applyTheme(currentTheme() === "light" ? "dark" : "light");
+  }
+
   /* ---------------- init ---------------- */
   function init() {
     const startTab = String(window.location.hash || "").replace("#", "");
@@ -2809,6 +2843,13 @@
 
     if (!storageOk()) {
       toast("This browser is blocking storage, so progress will not be saved.");
+    }
+
+    applyTheme(currentTheme());
+    const themeBtn = document.getElementById("theme-toggle");
+    if (themeBtn) {
+      themeBtn.textContent = currentTheme() === "light" ? "☾" : "☀";
+      themeBtn.addEventListener("click", toggleTheme);
     }
 
     render();
