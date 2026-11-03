@@ -934,3 +934,66 @@ h2, .h2, .btn, .option, .chip, .tag, .toast { color: inherit; }
   color: var(--accent);
   opacity: 0.85;
 }
+
+
+/* ---------- session history ---------- */
+.hist { display: flex; flex-direction: column; gap: 8px; }
+
+.hist-session {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-2);
+  padding: 0 12px;
+}
+
+.hist-session > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.hist-session > summary::-webkit-details-marker { display: none; }
+.hist-session[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+
+.hist-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 0 10px;
+  margin-bottom: 8px;
+}
+
+.hist-item > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.hist-item > summary::-webkit-details-marker { display: none; }
+.hist-item[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+
+.hist-item .snippet { flex: 1 1 auto; min-width: 0; color: var(--sub); }
+
+.hist-item .mark { font-size: 14px; font-weight: 700; }
+.hist-item .mark.ok { color: var(--ok); }
+.hist-item .mark.no { color: var(--no); }
+
+.hist-body { padding-bottom: 10px; }
+
+.hist-choice {
+  font-size: 13px;
+  margin: 10px 0 8px;
+  color: var(--muted);
+}
+
+.hist-choice b { color: var(--text); }

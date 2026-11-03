@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104c";
+  const BUILD = "20261104d";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -180,6 +180,7 @@
       totalAnswered: 0,
       deletedBankIds: [],
       learn: { done: {} },
+      history: [],
       meta: { createdAt: Date.now(), lastSavedAt: 0, settingsAt: 0, lastPushAt: 0 },
       sync: defaultSync()
     };
@@ -302,6 +303,7 @@
 
     if (!s.learn || typeof s.learn !== "object") s.learn = { done: {} };
     if (!s.learn.done || typeof s.learn.done !== "object") s.learn.done = {};
+    if (!Array.isArray(s.history)) s.history = [];
 
     const bank = normalizeEsapBank().concat(normalizeFreeBank());
     if (bank.length) {
@@ -598,6 +600,60 @@
     refreshSyncUI();
   }
 
+  function formatStamp(ms) {
+    const d = new Date(ms);
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " · " +
+      d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function historyHtml() {
+    const list = state.history || [];
+    if (!list.length) {
+      return '<p class="muted small" style="margin:0">No sessions yet. Finish one and it is kept here with every answer.</p>';
+    }
+
+    let html = '<div class="hist">';
+    list.forEach(function (sess) {
+      const pct = sess.count ? Math.round((sess.correct / sess.count) * 100) : 0;
+      const label = (sess.kind === "mock" ? "Timed mock" : "Practice") +
+        " · " + sess.count + " questions · " + pct + "%";
+
+      html += '<details class="hist-session">' +
+        '<summary><span>' + esc(formatStamp(sess.at)) + '</span>' +
+        '<span class="muted small">' + esc(label) + '</span></summary>';
+
+      sess.items.forEach(function (it, i) {
+        let opts = "";
+        (it.options || []).forEach(function (text, k) {
+          const L = LETTERS[k];
+          let cls = "option";
+          if (L === it.answer) cls += " correct";
+          else if (L === it.letter) cls += " wrong";
+          opts += '<div class="' + cls + '">' +
+            '<span class="opt-letter">' + L + '</span>' +
+            '<span class="opt-text">' + esc(text) + '</span></div>';
+        });
+
+        html += '<details class="hist-item"><summary>' +
+          '<span class="tag">' + esc(sectionName(it.section)) + '</span>' +
+          '<span class="snippet">' + esc(snippet(it.vignette, 64)) + '</span>' +
+          '<span class="mark ' + (it.correct ? "ok" : "no") + '">' + (it.correct ? "✓" : "✗") + '</span>' +
+          '</summary>' +
+          '<div class="hist-body">' +
+          '<div class="vignette">' + esc(it.vignette) + '</div>' +
+          '<div class="options">' + opts + '</div>' +
+          '<p class="hist-choice">You chose <b>' + esc(it.letter) + '</b> · answer <b>' + esc(it.answer) + '</b></p>' +
+          (it.why ? '<p class="why">' + esc(it.why) + '</p>' : '') +
+          (it.ref ? '<p class="ref">' + esc(it.ref) + '</p>' : '') +
+          '</div></details>';
+      });
+
+      html += '</details>';
+    });
+    html += '</div>';
+    return html;
+  }
+
   /* ---------------- today ---------------- */
   function renderToday() {
     const today = todayKey();
@@ -723,7 +779,7 @@
     html += '<section class="card">' +
       '<h3 style="margin:0 0 12px">Overview</h3>' +
       '<div class="row">' +
-      '<div class="stat"><b>' + seen + '/' + total + '</b><span>seen</span></div>' +
+      '<div class="stat"><b>' + counts.answered + '/' + total + '</b><span>answered</span></div>' +
       '<div class="stat"><b>' + (acc === null ? "—" : acc + "%") + '</b><span>accuracy</span></div>' +
       '<div class="stat"><b>' + streak() + '</b><span>day streak</span></div>' +
       '</div>' +
@@ -733,6 +789,9 @@
       '<details class="fold"><summary>Reading list</summary>' +
       '<p class="muted small" style="margin:0 0 10px">' + learnDoneCount() + ' of ' + learnItems().length + ' sources ticked off.</p>' +
       '<button class="btn ghost wide" data-action="go-learn">Open Learn</button></details>' +
+      '<details class="fold"><summary>History' +
+      ((state.history || []).length ? ' · ' + state.history.length + ' sessions' : '') +
+      '</summary>' + historyHtml() + '</details>' +
       '</section>';
 
     html += '<p class="center" style="margin:16px 0 0"><a class="tour-link" href="tour.html">&#9654; Watch the 2-minute app tour</a></p>';
@@ -896,6 +955,7 @@
 
     ui.session = {
       kind: "practice",
+      mode: mode,
       ids: queue.map(function (q) { return q.id; }),
       i: 0,
       answered: {},
@@ -959,6 +1019,57 @@
     window.scrollTo({ top: 0 });
   }
 
+  /* Keeps a snapshot of a finished session for the History fold on Today. */
+  function archiveSession() {
+    const s = ui.session;
+    if (!s) return;
+
+    const order = [];
+    const last = {};
+    s.log.forEach(function (e) {
+      if (!(e.id in last)) order.push(e.id);
+      last[e.id] = e;
+    });
+    if (!order.length) return;
+
+    const items = [];
+    let correct = 0;
+
+    order.forEach(function (id) {
+      const q = getQuestion(id);
+      const e = last[id];
+      if (!q || !e) return;
+      if (e.correct) correct++;
+      items.push({
+        id: id,
+        section: q.section,
+        vignette: q.vignette,
+        options: (q.options || []).slice(0, 5),
+        answer: q.answer,
+        why: q.why || "",
+        ref: q.ref || "",
+        letter: e.letter,
+        correct: !!e.correct
+      });
+    });
+
+    if (!items.length) return;
+
+    state.history = state.history || [];
+    state.history.unshift({
+      id: "s-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+      at: Date.now(),
+      startedAt: s.startedAt || Date.now(),
+      kind: s.kind,
+      mode: s.mode || ui.mode || "new",
+      count: items.length,
+      correct: correct,
+      items: items
+    });
+
+    if (state.history.length > 40) state.history.length = 40;
+  }
+
   function finishSession() {
     const s = ui.session;
     if (!s || s.finished) return;
@@ -973,6 +1084,8 @@
         schedule(id, first[id] ? "good" : "again");
       });
     }
+
+    archiveSession();
 
     if (ui.clock) {
       clearInterval(ui.clock);
@@ -1630,6 +1743,17 @@
       '<p class="muted small" style="margin:0 0 8px"><b>Questions</b> lists all 144 so you can look one up, flag it, or read the explanation without grading yourself.</p>' +
       '<p class="muted small" style="margin:0 0 8px"><b>Learn</b> is a short reading list with the exact sections to read in each source.</p>' +
       '<p class="muted small" style="margin:0">Your progress is saved on this device, and to the shared copy while it is on.</p>' +
+      '<details class="ref-block" style="margin-top:12px"><summary>How does grading work?</summary>' +
+      '<p class="muted small" style="margin:8px 0 6px">After you answer, you grade yourself. That grade never changes what you already earned — it sets when the card is next due and how fast the gap grows.</p>' +
+      '<p class="muted small" style="margin:0 0 6px"><b>Again</b> — you did not know it. The card comes back in this same session, about four questions later, it counts as a lapse, and its ease drops by 0.2 so the gap grows more slowly afterwards.</p>' +
+      '<p class="muted small" style="margin:0 0 6px"><b>Hard</b> — right, but barely. The gap grows only slightly (current gap × 1.2, at least one day) and ease drops by 0.15.</p>' +
+      '<p class="muted small" style="margin:0 0 6px"><b>Good</b> — right. One day for a first answer, three days for the second, then the current gap × its ease (2.5 by default).</p>' +
+      '<p class="muted small" style="margin:0 0 6px"><b>Easy</b> — you knew it cold. Ease rises by 0.15, and the gap grows fastest (a first answer starts at two days).</p>' +
+      '<p class="muted small" style="margin:0 0 6px"><b>Next without grading</b> — the answer is still recorded: attempts, accuracy, the section figures and the session history all count it. Nothing is scheduled, and the card still counts as answered.</p>' +
+      '<p class="muted small" style="margin:0 0 6px"><b>What it changes</b> — attempts and correct answers (so accuracy and the weakest-questions list), repetitions, ease, and the next-due date that orders <b>Catch up</b>.</p>' +
+      '<p class="muted small" style="margin:0 0 6px"><b>What it never does</b> — it cannot put a card back into <b>New</b>. Answered questions only return when you choose <b>Catch up</b> or, at 100%, <b>Full repeat</b>.</p>' +
+      '<p class="muted small" style="margin:0"><b>In a timed mock</b> there is no grading while you work: every answer is logged, and at the end the missed ones are graded Again and the correct ones Good for you.</p>' +
+      '</details>' +
       '<p class="muted small" style="margin:8px 0 0">Build ' + esc(BUILD) + '</p>' +
       '<p class="center" style="margin:12px 0 0"><a class="tour-link" href="tour.html">&#9654; Watch the app tour</a></p>' +
       '</details>';
@@ -2265,7 +2389,8 @@
         questions: state.questions,
         progress: state.progress,
         days: state.days,
-        learn: state.learn
+        learn: state.learn,
+        history: state.history || []
       };
       const text = JSON.stringify(payload, null, 2);
       const box = document.getElementById("export-area");
@@ -2300,6 +2425,7 @@
       state.days = {};
       state.totalAnswered = 0;
       state.learn = { done: {} };
+      state.history = [];
       state.questions.forEach(function (q) { delete q.updatedAt; });
       ui.mode = "new";
       save();
@@ -2541,6 +2667,7 @@
       progress: state.progress,
       days: state.days,
       learn: { done: state.learn && state.learn.done ? state.learn.done : {} },
+      history: (state.history || []).slice(0, 10),
       deletedBankIds: state.deletedBankIds || [],
       questions: changedQuestions()
     };
@@ -2613,6 +2740,22 @@
 
     if (!state.learn) state.learn = { done: {} };
     if (!state.learn.done) state.learn.done = {};
+
+    /* session history travels too, one record per session id */
+    if (!Array.isArray(state.history)) state.history = [];
+    const remoteHistory = Array.isArray(doc.history) ? doc.history : [];
+    remoteHistory.forEach(function (h) {
+      if (!h || !h.id || !Array.isArray(h.items)) return;
+      const known = state.history.some(function (x) { return x.id === h.id; });
+      if (!known) {
+        state.history.push(h);
+        changed = true;
+      }
+    });
+    if (state.history.length > 40) {
+      state.history.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+      state.history.length = 40;
+    }
     const remoteLearn = (doc.learn && doc.learn.done) || {};
     Object.keys(remoteLearn).forEach(function (id) {
       const cur = Number(state.learn.done[id]) || 0;
