@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104a";
+  const BUILD = "20261104b";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -1635,8 +1635,8 @@
       '</details>';
 
     html += '<section class="card"><h3>Data</h3><div class="stack">' +
-      '<button class="btn ghost wide" data-action="reset-progress">Reset scheduling (keep questions)</button>' +
-      '<button class="btn ghost wide danger" data-action="reset-all">Reset everything</button>' +
+      '<button class="btn ghost wide danger" data-action="reset-progress">Reset all progress</button>' +
+      '<button class="btn ghost wide danger" data-action="reset-all">Reset everything (reload the 144)</button>' +
       '</div></section>';
 
     html += '<p class="muted small center" style="margin:18px 0 0">Answer keys follow the ESAP 2026 answer key; the full discussions and references stay in the book.</p>';
@@ -2242,15 +2242,16 @@
       return;
     }
     if (action === "sync-off") {
-      if (!window.confirm("Stop sharing on this device? The database keeps the last saved copy.")) return;
+      if (!window.confirm("Disconnect this device? The database address is removed from this phone and progress stays on this device only.")) return;
       const s = syncSettings();
       s.off = true;
+      s.url = "";
       s.lastError = "";
       s.lastSyncAt = 0;
       stopLiveFeed();
       persist();
       render();
-      toast("This device is on its own now");
+      toast("Disconnected — this device is local only now");
       return;
     }
 
@@ -2294,13 +2295,16 @@
       return;
     }
     if (action === "reset-progress") {
-      if (!window.confirm("Reset all scheduling and history? Questions stay.")) return;
+      if (!window.confirm("Reset all progress? Every answer, streak, flag and reading tick is cleared and you start from question one again. The 144 questions stay.")) return;
       state.progress = {};
       state.days = {};
       state.totalAnswered = 0;
+      state.learn = { done: {} };
+      state.questions.forEach(function (q) { delete q.updatedAt; });
+      ui.mode = "new";
       save();
       render();
-      toast("Scheduling reset");
+      toast("All progress cleared");
       return;
     }
     if (action === "reset-all") {
@@ -2770,7 +2774,7 @@
         '<p class="sync-err"' + (s.lastError ? "" : " hidden") + '>' + esc(s.lastError || "") + '</p>' +
         '<div class="row" style="gap:8px">' +
         '<button class="btn ghost grow" data-action="sync-now">Save now</button>' +
-        '<button class="btn ghost grow" data-action="sync-off">This device only</button>' +
+        '<button class="btn ghost grow" data-action="sync-off">Disconnect this device</button>' +
         '</div>' +
         '<button class="btn ghost wide" style="margin-top:8px" data-action="sync-force">Send this copy anyway</button></div>';
     } else {
