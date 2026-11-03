@@ -997,3 +997,119 @@ h2, .h2, .btn, .option, .chip, .tag, .toast { color: inherit; }
 }
 
 .hist-choice b { color: var(--text); }
+
+
+/* ---------- flash-card button ---------- */
+.card-btn {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card-2);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.card-btn.on {
+  background: var(--accent-tint);
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.card-btn:active { transform: scale(0.92); }
+
+
+/* ---------- flash cards: front / back flip ---------- */
+.flash {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  padding: 12px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.15s ease;
+}
+
+.flash:active { transform: scale(0.995); }
+
+.flash-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.flash-vignette {
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  max-height: 42vh;
+  overflow: auto;
+}
+
+.flash-opts { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+
+.flash-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card-2);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.flash-opt .opt-letter {
+  flex: 0 0 auto;
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  background: var(--opt-letter-bg);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.flash-answer { font-size: 15px; margin: 4px 0 10px; color: var(--ok); }
+
+.flash-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.flash-back { display: none; }
+.flash.flipped .flash-front { display: none; }
+.flash.flipped .flash-back { display: block; }
+
+/* ---------- history rows: JS toggle so nested taps never collapse them ---------- */
+.hist-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+.hist-head .snippet { flex: 1 1 auto; min-width: 0; color: var(--sub); }
+.hist-head .mark { font-size: 14px; font-weight: 700; }
+.hist-head .mark.ok { color: var(--ok); }
+.hist-head .mark.no { color: var(--no); }
+
+.hist-item .hist-body { display: none; padding-bottom: 10px; }
+.hist-item.open .hist-body { display: block; border-top: 1px solid var(--line); padding-top: 10px; }

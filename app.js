@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104d";
+  const BUILD = "20261104e";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -143,6 +143,92 @@
     return t.length > max ? t.slice(0, max - 1).trim() + "…" : t;
   }
 
+  /* Only the opening words, for collapsed cards. */
+  function firstWords(text, n) {
+    const words = String(text || "").replace(/\s+/g, " ").trim().split(" ");
+    if (words.length <= n) return words.join(" ");
+    return words.slice(0, n).join(" ") + "…";
+  }
+
+  /* ---------- flash cards ---------- */
+  function findCard(qid) {
+    const list = state.cards || [];
+    return list.filter(function (c) { return c.qid === qid; })[0] || null;
+  }
+
+  function toggleCard(qid) {
+    const q = getQuestion(qid);
+    if (!q) return;
+    state.cards = state.cards || [];
+    const at = state.cards.findIndex(function (c) { return c.qid === q.id; });
+    if (at !== -1) {
+      state.cards.splice(at, 1);
+      toast("Flash card removed");
+    } else {
+      state.cards.unshift({
+        id: "c-" + q.id,
+        qid: q.id,
+        section: q.section,
+        vignette: q.vignette,
+        options: (q.options || []).slice(0, 5),
+        answer: q.answer,
+        why: q.why || "",
+        ref: q.ref || "",
+        at: Date.now()
+      });
+      toast("Added to flash cards");
+    }
+
+    save();
+
+    const on = !!findCard(q.id);
+    const buttons = document.querySelectorAll(".card-btn");
+    for (let i = 0; i < buttons.length; i++) {
+      if (buttons[i].getAttribute("data-id") === q.id) {
+        buttons[i].textContent = on ? "✓" : "+";
+        buttons[i].classList.toggle("on", on);
+      }
+    }
+
+    /* only the Study list needs redrawing, to add or drop the card itself */
+    if (ui.tab === "study" && !ui.session) render();
+  }
+
+  function cardButton(qid) {
+    const on = !!findCard(qid);
+    return '<button class="card-btn' + (on ? " on" : "") + '" data-action="card-toggle" data-id="' +
+      esc(qid) + '" aria-label="Flash card">' + (on ? "✓" : "+") + '</button>';
+  }
+
+  function cardHtml(c) {
+    let opts = "";
+    (c.options || []).forEach(function (text, k) {
+      const L = LETTERS[k];
+      opts += '<div class="flash-opt"><span class="opt-letter">' + L + '</span>' +
+        '<span class="opt-text">' + esc(text) + '</span></div>';
+    });
+
+    const answerText = (c.options || [])[LETTERS.indexOf(c.answer)] || "";
+
+    return '<div class="flash" data-action="flash-flip">' +
+      '<div class="flash-front">' +
+      '<div class="flash-top"><span class="tag">' + esc(sectionName(c.section)) + '</span>' +
+      '<button class="card-btn on" data-action="card-toggle" data-id="' + esc(c.qid) + '">✓</button></div>' +
+      '<div class="flash-vignette">' + esc(c.vignette) + '</div>' +
+      '<div class="flash-opts">' + opts + '</div>' +
+      '<p class="flash-hint">Tap to see the answer</p>' +
+      '</div>' +
+      '<div class="flash-back">' +
+      '<div class="flash-top"><span class="tag">Answer ' + esc(c.answer) + '</span>' +
+      '<button class="card-btn on" data-action="card-toggle" data-id="' + esc(c.qid) + '">✓</button></div>' +
+      '<p class="flash-answer"><b>' + esc(c.answer) + ')</b> ' + esc(answerText) + '</p>' +
+      (c.why ? '<p class="why">' + esc(c.why) + '</p>' : '') +
+      (c.ref ? '<p class="ref">' + esc(c.ref) + '</p>' : '') +
+      '<p class="flash-hint">Tap to go back</p>' +
+      '</div></div>';
+  }
+
+
   function shuffle(arr) {
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) {
@@ -181,6 +267,7 @@
       deletedBankIds: [],
       learn: { done: {} },
       history: [],
+      cards: [],
       meta: { createdAt: Date.now(), lastSavedAt: 0, settingsAt: 0, lastPushAt: 0 },
       sync: defaultSync()
     };
@@ -304,6 +391,7 @@
     if (!s.learn || typeof s.learn !== "object") s.learn = { done: {} };
     if (!s.learn.done || typeof s.learn.done !== "object") s.learn.done = {};
     if (!Array.isArray(s.history)) s.history = [];
+    if (!Array.isArray(s.cards)) s.cards = [];
 
     const bank = normalizeEsapBank().concat(normalizeFreeBank());
     if (bank.length) {
@@ -534,6 +622,8 @@
     tab: "today",
     section: "all",
     mode: "new",
+    catchupPrompt: false,
+    startTraining: false,
     size: 20,
     ignoreLimit: false,
     learnFilter: "all",
@@ -634,18 +724,20 @@
             '<span class="opt-text">' + esc(text) + '</span></div>';
         });
 
-        html += '<details class="hist-item"><summary>' +
+        html += '<div class="hist-item">' +
+          '<div class="hist-head" data-action="hist-toggle">' +
           '<span class="tag">' + esc(sectionName(it.section)) + '</span>' +
-          '<span class="snippet">' + esc(snippet(it.vignette, 64)) + '</span>' +
+          '<span class="snippet">' + esc(firstWords(it.vignette, 5)) + '</span>' +
           '<span class="mark ' + (it.correct ? "ok" : "no") + '">' + (it.correct ? "✓" : "✗") + '</span>' +
-          '</summary>' +
+          cardButton(it.id) +
+          '</div>' +
           '<div class="hist-body">' +
           '<div class="vignette">' + esc(it.vignette) + '</div>' +
           '<div class="options">' + opts + '</div>' +
           '<p class="hist-choice">You chose <b>' + esc(it.letter) + '</b> · answer <b>' + esc(it.answer) + '</b></p>' +
           (it.why ? '<p class="why">' + esc(it.why) + '</p>' : '') +
           (it.ref ? '<p class="ref">' + esc(it.ref) + '</p>' : '') +
-          '</div></details>';
+          '</div></div>';
       });
 
       html += '</details>';
@@ -839,6 +931,34 @@
       '<p class="muted small" style="margin:10px 0 0">' + modeLine + '</p>' +
       '</section>';
 
+    /* retake catch-up, with a choice of training or graded */
+    html += '<section class="card"><h3>Catch up retake</h3>';
+    if (ps.answered === 0) {
+      html += '<p class="muted small" style="margin:0">Answer a few questions first — they come back here.</p>';
+    } else if (ui.catchupPrompt) {
+      html += '<p class="muted small" style="margin:0 0 10px">Retake the ' + ps.answered +
+        ' questions you have already answered. <b>Training</b> changes nothing at all — no answers, no stats, no history. <b>Graded</b> counts everywhere.</p>' +
+        '<div class="stack">' +
+        '<button class="btn primary wide" data-action="catchup-training">Training only — no progress changes</button>' +
+        '<button class="btn wide" data-action="catchup-graded">Graded — counts in your stats</button>' +
+        '<button class="btn ghost wide" data-action="catchup-cancel">Cancel</button>' +
+        '</div>';
+    } else {
+      html += '<button class="btn wide" data-action="catchup-ask">Retake catch-up · ' +
+        ps.answered + ' questions</button>';
+    }
+    html += '</section>';
+
+    /* flash cards */
+    const cards = state.cards || [];
+    html += '<details class="fold card"><summary>Flash cards · ' + cards.length + '</summary>';
+    if (!cards.length) {
+      html += '<p class="muted small" style="margin:0">None yet. Tap <b>+</b> on any question — in a session, in Questions, or in the history — and it lands here.</p>';
+    } else {
+      cards.forEach(function (c) { html += cardHtml(c); });
+    }
+    html += '</details>';
+
     html += '<section class="card"><h3>Section</h3><div class="chips">' +
       '<button class="chip' + (ui.section === "all" ? " on" : "") + '" data-action="pick-section" data-section="all">' +
       'All (' + state.questions.length + ')</button>';
@@ -892,9 +1012,12 @@
 
     if (mode === "catchup") {
       /* only questions already answered, weakest first, then longest overdue */
+      const trainingOnly = !!ui.startTraining;
       pool = allInSection.filter(function (q) {
         const p = prog(q.id);
-        return p.attempts > 0 && !(p.day === today && !p.repeatToday);
+        if (p.attempts === 0) return false;
+        if (trainingOnly) return true;
+        return !(p.day === today && !p.repeatToday);
       });
       pool.sort(function (a, b) {
         const pa = prog(a.id);
@@ -956,6 +1079,7 @@
     ui.session = {
       kind: "practice",
       mode: mode,
+      training: !!ui.startTraining,
       ids: queue.map(function (q) { return q.id; }),
       i: 0,
       answered: {},
@@ -963,6 +1087,7 @@
       startedAt: Date.now(),
       finished: false
     };
+    ui.startTraining = false;
     ui.tab = "study";
     render();
     window.scrollTo({ top: 0 });
@@ -1085,7 +1210,7 @@
       });
     }
 
-    archiveSession();
+    if (!s.training) archiveSession();
 
     if (ui.clock) {
       clearInterval(ui.clock);
@@ -1146,8 +1271,10 @@
     let html = '<section class="card">' +
       '<div class="row between">' +
       '<span class="tag">' + esc(sectionName(q.section)) + '</span>' +
+      '<div class="row" style="gap:8px">' +
       '<span class="muted small mono">' + (s.i + 1) + ' / ' + s.ids.length + '</span>' +
-      '</div>';
+      cardButton(q.id) +
+      '</div></div>';
 
     if (s.kind === "mock") {
       html += '<div class="row between" style="margin-top:8px">' +
@@ -1170,7 +1297,7 @@
     });
     html += '<div class="options">' + opts + '</div>';
 
-    if (!isMock && a) html += renderFeedback(q, a);
+    if (!isMock && a) html += renderFeedback(q, a, !!s.training);
 
     if (isMock) {
       html += '<p class="muted small" style="margin:12px 0 0">Pick one answer to move on. Feedback comes at the end.</p>';
@@ -1186,7 +1313,7 @@
     return html;
   }
 
-  function renderFeedback(q, a) {
+  function renderFeedback(q, a, training) {
     const p = prog(q.id);
     const correctText = (q.options || [])[LETTERS.indexOf(q.answer)] || "";
     const suggested = a.correct ? "good" : "again";
@@ -1204,8 +1331,10 @@
       '<p class="answer-line"><b>' + esc(q.answer) + ')</b> ' + esc(correctText) + '</p>' +
       (q.why ? '<p class="why">' + esc(q.why) + '</p>' : '') +
       (q.ref ? '<p class="ref">' + esc(q.ref) + '</p>' : '') +
-      '<div class="grade-row">' + btns + '</div>' +
-      '<button class="btn ghost wide" data-action="grade" data-grade="skip">Next without grading</button>' +
+      (training
+        ? '<button class="btn primary wide" data-action="next-question">Next question</button>'
+        : '<div class="grade-row">' + btns + '</div>' +
+        '<button class="btn ghost wide" data-action="grade" data-grade="skip">Next without grading</button>') +
       '</div>';
   }
 
@@ -1232,10 +1361,11 @@
     const missed = ids.filter(function (id) { return !first[id] && getQuestion(id); });
 
     let html = '<section class="card center">' +
-      '<h3>' + (s.kind === "mock" ? "Mock result" : "Session complete") + '</h3>' +
+      '<h3>' + (s.training ? "Training complete" : s.kind === "mock" ? "Mock result" : "Session complete") + '</h3>' +
       '<div class="big-num">' + pct + '<span>%</span></div>' +
       '<p class="muted small" style="margin-bottom:0">' + correct + ' of ' + ids.length + ' correct' +
       (missed.length ? ' · ' + missed.length + ' to revisit' : '') + '</p>' +
+      (s.training ? '<p class="muted small" style="margin:6px 0 0;color:var(--muted)">Training only — nothing was recorded.</p>' : '') +
       '</section>';
 
     if (ids.length) {
@@ -1298,20 +1428,25 @@
 
     html += '<section class="card tight">' +
       '<input class="input" id="bank-search" type="search" placeholder="Search stem, options, explanation" value="' + esc(ui.bankQuery) + '" />' +
-      '<div class="chips" style="margin-top:10px">' +
+      '</section>';
+
+    const filterLabel = (ui.bankFilter === "all" ? "All" : ui.bankFilter.charAt(0).toUpperCase() + ui.bankFilter.slice(1)) +
+      " · " + (ui.bankSection === "all" ? "all sections" : sectionName(ui.bankSection));
+
+    html += '<details class="fold"><summary>Filters · ' + esc(filterLabel) + '</summary>' +
+      '<div class="chips">' +
       [["all", "All"], ["due", "Due"], ["new", "New"], ["flagged", "Flagged"]].map(function (f) {
         return '<button class="chip' + (ui.bankFilter === f[0] ? " on" : "") + '" data-action="bank-filter" data-filter="' + f[0] + '">' + f[1] + '</button>';
       }).join("") +
-      '</div></section>';
-
-    html += '<div class="chips" style="margin-bottom:12px">' +
+      '</div>' +
+      '<div class="chips" style="margin-top:10px">' +
       '<button class="chip' + (ui.bankSection === "all" ? " on" : "") + '" data-action="bank-section" data-section="all">All sections</button>' +
       SECTIONS.map(function (s) {
         if (!state.questions.some(function (q) { return q.section === s.id; })) return "";
         return '<button class="chip' + (ui.bankSection === s.id ? " on" : "") + '" data-action="bank-section" data-section="' + s.id + '">' +
           esc(s.name) + '</button>';
       }).join("") +
-      '</div>';
+      '</div></details>';
 
     if (!list.length) {
       html += '<div class="empty">No questions match this filter.<br>Clear the search or pick another section.</div>';
@@ -1359,6 +1494,7 @@
     return '<div class="row between">' +
       '<button class="btn ghost" data-action="close-detail">‹ Questions</button>' +
       '<div class="row">' +
+      cardButton(q.id) +
       '<button class="btn ghost" data-action="toggle-flag" data-id="' + esc(q.id) + '">' + (p.flagged ? "Unflag" : "Flag") + '</button>' +
       '<button class="btn" data-action="edit-question" data-id="' + esc(q.id) + '">Edit</button>' +
       '</div></div>' +
@@ -1559,14 +1695,19 @@
       '<p class="muted small" style="margin:4px 0 10px">Ten sources mapped to the exam blueprint. Read only the sections named in each card, then tick it.</p>' +
       '<div class="bar"><i style="width:' + pct + '%"></i></div>';
 
-    html += '<div class="chips" style="margin:14px 0 10px">' +
+    const filterName = filter === "all" ? "All sources"
+      : filter === "todo" ? "To do"
+      : sectionName(filter) + " · " + (SECTION_BY_ID[filter] ? SECTION_BY_ID[filter].weight + "%" : "");
+
+    html += '<details class="fold"><summary>Filter · ' + esc(filterName) + '</summary>' +
+      '<div class="chips">' +
       '<button class="chip' + (filter === "all" ? " on" : "") + '" data-action="learn-filter" data-filter="all">All</button>' +
       '<button class="chip' + (filter === "todo" ? " on" : "") + '" data-action="learn-filter" data-filter="todo">To do</button>' +
       SECTIONS.filter(function (s) { return s.id !== "unknown"; }).map(function (s) {
         return '<button class="chip' + (filter === s.id ? " on" : "") + '" data-action="learn-filter" data-filter="' + s.id + '">' +
           esc(s.name) + ' ' + s.weight + '%</button>';
       }).join("") +
-      '</div>';
+      '</div></details>';
 
     html += '<p class="muted small" style="margin:0 0 14px">These eight areas are the whole paper. If a section is weak under <b>Your progress</b> below, filter to it here and read the sources tagged for it.</p>';
 
@@ -2074,6 +2215,24 @@
     if (!el) return;
     const action = el.dataset.action;
 
+    /* a flash-card tap inside a foldable row must not open the row */
+    if (action === "card-toggle") {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleCard(el.dataset.id);
+      return;
+    }
+    if (action === "flash-flip") {
+      e.stopPropagation();
+      el.classList.toggle("flipped");
+      return;
+    }
+    if (action === "hist-toggle") {
+      const item = el.parentNode;
+      if (item) item.classList.toggle("open");
+      return;
+    }
+
     /* --- study setup --- */
     if (action === "pick-section") {
       ui.section = el.dataset.section;
@@ -2083,6 +2242,37 @@
     if (action === "pick-size") {
       ui.size = Number(el.dataset.size);
       render();
+      return;
+    }
+    if (action === "catchup-ask") {
+      ui.catchupPrompt = true;
+      render();
+      return;
+    }
+    if (action === "catchup-cancel") {
+      ui.catchupPrompt = false;
+      render();
+      return;
+    }
+    if (action === "catchup-training") {
+      ui.catchupPrompt = false;
+      ui.mode = "catchup";
+      ui.startTraining = true;
+      startPractice();
+      return;
+    }
+    if (action === "catchup-graded") {
+      ui.catchupPrompt = false;
+      ui.mode = "catchup";
+      startPractice();
+      return;
+    }
+    if (action === "next-question") {
+      const s = ui.session;
+      if (!s) return;
+      s.i++;
+      render();
+      window.scrollTo({ top: 0 });
       return;
     }
     if (action === "toggle-limit") {
@@ -2165,6 +2355,14 @@
       const letter = el.dataset.letter;
       const correct = letter === q.answer;
       s.answered[q.id] = { letter: letter, correct: correct };
+
+      if (s.training) {
+        /* training only: nothing is recorded anywhere */
+        render();
+        window.scrollTo({ top: 0 });
+        return;
+      }
+
       s.log.push({ id: q.id, correct: correct, letter: letter });
       recordAnswer(q.id, correct);
 
@@ -2390,7 +2588,8 @@
         progress: state.progress,
         days: state.days,
         learn: state.learn,
-        history: state.history || []
+        history: state.history || [],
+        cards: state.cards || []
       };
       const text = JSON.stringify(payload, null, 2);
       const box = document.getElementById("export-area");
@@ -2668,6 +2867,7 @@
       days: state.days,
       learn: { done: state.learn && state.learn.done ? state.learn.done : {} },
       history: (state.history || []).slice(0, 10),
+      cards: state.cards || [],
       deletedBankIds: state.deletedBankIds || [],
       questions: changedQuestions()
     };
@@ -2756,6 +2956,18 @@
       state.history.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
       state.history.length = 40;
     }
+
+    /* flash cards travel too */
+    if (!Array.isArray(state.cards)) state.cards = [];
+    const remoteCards = Array.isArray(doc.cards) ? doc.cards : [];
+    remoteCards.forEach(function (c) {
+      if (!c || !c.qid || !c.vignette) return;
+      const known = state.cards.some(function (x) { return x.qid === c.qid; });
+      if (!known) {
+        state.cards.push(c);
+        changed = true;
+      }
+    });
     const remoteLearn = (doc.learn && doc.learn.done) || {};
     Object.keys(remoteLearn).forEach(function (id) {
       const cur = Number(state.learn.done[id]) || 0;
