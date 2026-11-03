@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104b";
+  const BUILD = "20261104c";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -2938,6 +2938,9 @@
       themeBtn.textContent = currentTheme() === "light" ? "☾" : "☀";
       themeBtn.addEventListener("click", toggleTheme);
     }
+
+    const buildTag = document.getElementById("build-tag");
+    if (buildTag) buildTag.textContent = "build " + BUILD;
 
     render();
     startSync();

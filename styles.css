@@ -920,3 +920,17 @@ h2, .h2, .btn, .option, .chip, .tag, .toast { color: inherit; }
 .tab.active .ico { color: var(--accent); text-shadow: 0 0 12px var(--accent-soft); }
 
 .toast { bottom: calc(104px + env(safe-area-inset-bottom)); }
+
+
+/* ---------- title and build stamp ---------- */
+.title-text { display: flex; flex-direction: column; line-height: 1.15; }
+.title-text h1 { font-size: 17px; margin: 0; }
+
+.build-tag {
+  margin-top: 1px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--accent);
+  opacity: 0.85;
+}
