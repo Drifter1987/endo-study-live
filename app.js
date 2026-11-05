@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104h";
+  const BUILD = "20261104i";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -215,7 +215,7 @@
       esc(q.source || "Question") + ' · open this question in the bank →</a>';
   }
 
-  /* Opens the ESAP PDF in an overlay, searching for the question's opening words. */
+  /* Opens the ESAP book in an in-app reader, scrolled to the question. */
   function openPdf(q) {
     const overlay = document.getElementById("pdf-overlay");
     const frame = document.getElementById("pdf-frame");
@@ -223,19 +223,17 @@
     const hint = document.getElementById("pdf-hint");
     const ext = document.getElementById("pdf-ext");
     if (!overlay || !frame) {
-      toast("The PDF viewer is not available here");
+      toast("The reader is not available here");
       return;
     }
 
-    const words = firstWords(q.vignette, 8).replace(/…$/, "");
+    const words = firstWords(q.vignette, 9).replace(/…$/, "");
     const n = esapNumber(q);
-    const src = "ESAP_2026_fk39g9hhj.pdf#search=" + encodeURIComponent(words) + "&phrase=true";
+    const src = "reader.html?n=" + n + "&w=" + encodeURIComponent(words);
 
     if (label) label.textContent = "ESAP 2026 · Question " + n;
-    if (hint) {
-      hint.textContent = "Searching for “" + words + "”. If it opens at page 1, use the PDF's own search box with those words — the iPhone preview does not honour the jump.";
-    }
-    if (ext) ext.href = src;
+    if (hint) hint.textContent = "The book itself, opened at the question and highlighted.";
+    if (ext) ext.href = "ESAP_2026_fk39g9hhj.pdf";
     frame.src = src;
     overlay.hidden = false;
   }
@@ -3411,6 +3409,10 @@
 
     const pdfClose = document.getElementById("pdf-close");
     if (pdfClose) pdfClose.addEventListener("click", closePdf);
+
+    window.addEventListener("message", function (e) {
+      if (e && e.data && e.data.type === "endo-close-reader") closePdf();
+    });
 
     render();
     startSync();

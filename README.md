@@ -18,7 +18,9 @@ browser's localStorage on this device.
   questions, answers per day) in a fold, so there is no separate Stats tab. The timed mock gives 40
   blueprint-weighted questions with a clock.
 - **Questions** — all 144 in one searchable list: filter by section, due, new or flagged; open
-  one to read the answer and explanation; flag, edit or delete.
+  one to read the answer and explanation; flag, edit or delete. Under every revealed answer there
+  is a reference that opens the **ESAP book itself** in an in-app reader (`reader.html`), scrolled
+  to that question with its text highlighted.
 - **Learn** — the reading list. Each card shows what the source is; the exact sections to read
   are in a **What to read** fold.
 - **More** — exam date and daily limit, mock settings, then collapsed folds for backup, lab
