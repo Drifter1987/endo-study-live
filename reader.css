@@ -44,8 +44,7 @@ body { display: flex; flex-direction: column; }
 .label { font-size: 13px; font-weight: 650; }
 .page-ind { margin-left: auto; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-.strip {
-  padding: 7px 12px;
+.strip {  padding: 7px 12px;
   font-size: 11.5px;
   line-height: 1.4;
   color: var(--muted);
@@ -85,4 +84,40 @@ body { display: flex; flex-direction: column; }
   background: rgba(255, 255, 255, 0.7);
   padding: 1px 5px;
   border-radius: 4px;
+}
+
+
+.find {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #1a1526;
+  border-bottom: 1px solid var(--line);
+}
+
+.find input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #120e19;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.find input:focus { outline: none; border-color: var(--accent); }
+
+.find button {
+  appearance: none;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }

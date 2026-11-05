@@ -2,15 +2,17 @@
   "use strict";
 
   const FILE = "ESAP_2026_fk39g9hhj.pdf";
-  const CACHE_KEY = "esap-page-map-v1";
   const params = new URLSearchParams(location.search);
-  const phrase = (params.get("w") || "").trim();
   const want = parseInt(params.get("n") || "0", 10) || 0;
+  const answerText = (params.get("a") || "").trim();
+  const stemText = (params.get("w") || "").trim();
 
   const pagesEl = document.getElementById("pages");
   const strip = document.getElementById("strip");
   const label = document.getElementById("label");
   const ind = document.getElementById("page-ind");
+  const findInput = document.getElementById("find-input");
+  const findBtn = document.getElementById("find-btn");
 
   document.getElementById("close").addEventListener("click", function () {
     if (window.parent && window.parent !== window) {
@@ -38,22 +40,11 @@
   }, { root: pagesEl, rootMargin: "900px 0px" });
 
   function norm(t) {
-    return String(t || "").replace(/\s+/g, " ").trim().toLowerCase();
-  }
-
-  function loadCache() {
-    try {
-      const raw = localStorage.getItem(CACHE_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  const pageMap = loadCache();
-
-  function saveCache() {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify(pageMap)); } catch (e) { /* ignore */ }
+    return String(t || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   function makeSheet(n) {
@@ -115,12 +106,6 @@
     }
   }
 
-  function applyHighlight(view, first, last) {
-    if (first === -1 || last === -1) return;
-    view.hit = { first: first, last: last };
-    if (view.rendered) markSheet(view);
-  }
-
   function markSheet(view) {
     if (!view.hit || !view.raw) return;
     view.marks.innerHTML = "";
@@ -147,43 +132,6 @@
     }
   }
 
-  /* Finds the page holding "Question N" (or "QN", or "N.") and remembers it. */
-  async function pageForNumber(n) {
-    const patterns = [
-      new RegExp("question\\s*#?\\s*" + n + "\\b", "i"),
-      new RegExp("\\bq\\.?\\s*" + n + "\\b", "i"),
-      new RegExp("(^|\\s)" + n + "\\.\\s", "i")
-    ];
-
-    const start = Math.max(1, Math.min(doc.numPages,
-      Math.round(((n - 1) / 120) * doc.numPages) || 1));
-
-    const order = [];
-    for (let p = start; p <= doc.numPages; p++) order.push(p);
-    for (let p = 1; p < start; p++) order.push(p);
-
-    for (let i = 0; i < order.length; i++) {
-      const p = order[i];
-      strip.textContent = "Finding question " + n + "… page " + p + " of " + doc.numPages;
-      let page;
-      try {
-        page = await doc.getPage(p);
-      } catch (e) {
-        continue;
-      }
-      const items = await itemsFor(page);
-      const text = items.map(function (it) { return it.str; }).join("\n");
-      for (let k = 0; k < patterns.length; k++) {
-        const m = patterns[k].exec(text);
-        if (!m) continue;
-        pageMap[n] = p;
-        saveCache();
-        return { page: p, items: items };
-      }
-    }
-    return null;
-  }
-
   function rangeFor(items, at, length) {
     let acc = 0;
     let first = -1;
@@ -203,50 +151,119 @@
 
   function jump(pageNo, range) {
     const sheet = sheets[pageNo - 1];
-    if (!sheet) return;
-    if (range) applyHighlight(sheet, range.first, range.last);
+    if (!sheet) return false;
+    sheet.hit = range && range.first !== -1 ? range : null;
     sheet.wrap.scrollIntoView({ block: "start" });
     if (!sheet.rendered) renderSheet(sheet);
+    else if (sheet.hit) markSheet(sheet);
+
     [200, 700, 1500].forEach(function (t) {
       setTimeout(function () {
         try { sheet.wrap.scrollIntoView({ block: "start" }); } catch (e) { /* ignore */ }
       }, t);
     });
     ind.textContent = pageNo + " / " + doc.numPages;
+    return true;
   }
 
-  async function findByPhrase() {
-    const words = phrase.split(/\s+/).filter(Boolean);
-    if (!words.length) return false;
+  async function pageInfo(p) {
+    const page = await doc.getPage(p);
+    const items = await itemsFor(page);
+    return { page: p, items: items, text: items.map(function (i) { return i.str; }).join(" ") };
+  }
 
-    const sizes = [9, 7, 5, 4].filter(function (k, i, a) {
-      return k <= words.length && a.indexOf(k) === i;
-    });
+  function mentionsNumber(rawText, n) {
+    const head = String(rawText || "").slice(0, 900).toLowerCase();
+    if (new RegExp("question\\s*#?\\s*" + n + "\\b").test(head)) return true;
+    if (new RegExp("(^|\\n)\\s*" + n + "\\.\\s").test(head)) return true;
+    return false;
+  }
 
-    for (let t = 0; t < sizes.length; t++) {
-      const needle = norm(words.slice(0, sizes[t]).join(" "));
-      for (let n = 1; n <= doc.numPages; n++) {
-        strip.textContent = "Searching the text… (" + sizes[t] + " words, page " + n + ")";
-        let page;
-        let items;
-        try {
-          page = await doc.getPage(n);
-          items = await itemsFor(page);
-        } catch (e) {
-          continue;
-        }
-        const normed = items.map(function (i) { return { str: norm(i.str) }; });
-        const text = normed.map(function (i) { return i.str; }).join(" ");
-        const at = text.indexOf(needle);
-        if (at === -1) continue;
+  /* Scans every page for a phrase; optionally demands the question number too. */
+  async function findPhrase(phrase, needNumber, label2) {
+    const needle = norm(phrase);
+    if (needle.length < 8) return null;
 
-        const sheet = sheets[n - 1];
-        if (sheet) sheet.raw = sheet.raw || items;
-        jump(n, rangeFor(normed, at, needle.length));
-        return true;
+    for (let p = 1; p <= doc.numPages; p++) {
+      strip.textContent = label2 + " — page " + p + " of " + doc.numPages;
+      let info;
+      try {
+        info = await pageInfo(p);
+      } catch (e) {
+        continue;
+      }
+      const text = norm(info.text);
+      const at = text.indexOf(needle);
+      if (at === -1) continue;
+      if (needNumber && want && !mentionsNumber(info.text, want)) continue;
+
+      const normed = info.items.map(function (i) { return { str: norm(i.str) }; });
+      const at2 = normed.map(function (i) { return i.str; }).join(" ").indexOf(needle);
+      const range = at2 === -1 ? null : rangeFor(normed, at2, needle.length);
+      const sheet = sheets[p - 1];
+      if (sheet) sheet.raw = sheet.raw || info.items;
+      return { page: p, range: range };
+    }
+    return null;
+  }
+
+  async function goToQuestion() {
+    const found = [];
+
+    /* 1. the correct answer is printed verbatim in the book */
+    if (answerText) {
+      const byAnswer = await findPhrase(answerText, true, "Finding the answer text");
+      if (byAnswer) found.push(byAnswer);
+      else {
+        const loose = await findPhrase(answerText, false, "Finding the answer text");
+        if (loose) found.push(loose);
       }
     }
-    return false;
+
+    /* 2. the opening words of the case */
+    if (!found.length && stemText) {
+      const words = stemText.split(/\s+/).filter(Boolean);
+      for (let k = Math.min(9, words.length); k >= 5; k--) {
+        const byStem = await findPhrase(words.slice(0, k).join(" "), false, "Finding the case");
+        if (byStem) { found.push(byStem); break; }
+      }
+    }
+
+    if (!found.length) return false;
+
+    const hit = found[0];
+    const sheet = sheets[hit.page - 1];
+    if (sheet) sheet.raw = sheet.raw || null;
+    jump(hit.page, hit.range);
+    return true;
+  }
+
+  function wireSearch() {
+    const run = function () {
+      const q = (findInput.value || "").trim();
+      if (!q || !doc) return;
+      findBtn.disabled = true;
+      findPhrase(q, false, "Searching").then(function (hit) {
+        findBtn.disabled = false;
+        if (!hit) {
+          strip.textContent = "Nothing found for “" + q + "”.";
+          return;
+        }
+        jump(hit.page, hit.range);
+        strip.textContent = "Found on page " + hit.page + " — highlighted.";
+      }, function () {
+        findBtn.disabled = false;
+        strip.textContent = "Search failed.";
+      });
+    };
+
+    findBtn.addEventListener("click", run);
+    findInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        run();
+      }
+    });
   }
 
   async function start() {
@@ -273,34 +290,17 @@
       ind.textContent = cur + " / " + doc.numPages;
     });
 
-    if (!want) {
-      strip.textContent = doc.numPages + " pages, opened in " + opened + " ms.";
+    wireSearch();
+
+    if (!want && !answerText) {
+      strip.textContent = doc.numPages + " pages, opened in " + opened + " ms. Use the search box.";
       return;
     }
 
-    if (pageMap[want]) {
-      jump(pageMap[want], null);
-      strip.textContent = "Question " + want + " · page " + pageMap[want] + " (remembered) · opened in " + opened + " ms.";
-      return;
-    }
-
-    const found = await pageForNumber(want);
-    if (found) {
-      const needle = norm(phrase.split(/\s+/).slice(0, 5).join(" "));
-      const normed = found.items.map(function (i) { return { str: norm(i.str) }; });
-      const at = normed.map(function (i) { return i.str; }).join(" ").indexOf(needle);
-      const range = at === -1 ? null : rangeFor(normed, at, needle.length);
-      const sheet = sheets[found.page - 1];
-      if (sheet) sheet.raw = sheet.raw || found.items;
-      jump(found.page, range);
-      strip.textContent = "Question " + want + " · page " + found.page + " · opened in " + opened + " ms.";
-      return;
-    }
-
-    const viaText = await findByPhrase();
-    strip.textContent = viaText
-      ? "Found by its words · opened in " + opened + " ms."
-      : "Question " + want + " was not found — use the PDF's search for the same words.";
+    const ok = await goToQuestion();
+    strip.textContent = ok
+      ? "Question" + (want ? " " + want : "") + " found · opened in " + opened + " ms."
+      : "Question" + (want ? " " + want : "") + " was not found — search the book for a phrase from it.";
   }
 
   start();

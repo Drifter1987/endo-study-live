@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104j";
+  const BUILD = "20261104k";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -228,8 +228,11 @@
     }
 
     const words = firstWords(q.vignette, 9).replace(/…$/, "");
+    const answerText = (q.options || [])[LETTERS.indexOf(q.answer)] || "";
     const n = esapNumber(q);
-    const src = "reader.html?n=" + n + "&w=" + encodeURIComponent(words);
+    const src = "reader.html?n=" + n +
+      "&a=" + encodeURIComponent(answerText) +
+      "&w=" + encodeURIComponent(words);
 
     if (label) label.textContent = "ESAP 2026 · Question " + n;
     if (hint) hint.textContent = "The book itself, opened at the question and highlighted.";
