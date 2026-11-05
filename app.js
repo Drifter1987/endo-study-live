@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104g";
+  const BUILD = "20261104h";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -198,6 +198,53 @@
     const on = !!findCard(qid);
     return '<button class="card-btn' + (on ? " on" : "") + '" data-action="card-toggle" data-id="' +
       esc(qid) + '" aria-label="Flash card">' + (on ? "✓" : "+") + '</button>';
+  }
+
+  function esapNumber(q) {
+    const m = /^esap-(\d+)$/.exec(q.id);
+    return m ? Number(m[1]) : null;
+  }
+
+  function refLink(q) {
+    const n = esapNumber(q);
+    if (n) {
+      return '<a class="ref-link" href="#" data-action="open-pdf" data-id="' + esc(q.id) + '">' +
+        'ESAP 2026 · open question ' + n + ' in the PDF →</a>';
+    }
+    return '<a class="ref-link" href="#" data-action="open-ref" data-id="' + esc(q.id) + '">' +
+      esc(q.source || "Question") + ' · open this question in the bank →</a>';
+  }
+
+  /* Opens the ESAP PDF in an overlay, searching for the question's opening words. */
+  function openPdf(q) {
+    const overlay = document.getElementById("pdf-overlay");
+    const frame = document.getElementById("pdf-frame");
+    const label = document.getElementById("pdf-label");
+    const hint = document.getElementById("pdf-hint");
+    const ext = document.getElementById("pdf-ext");
+    if (!overlay || !frame) {
+      toast("The PDF viewer is not available here");
+      return;
+    }
+
+    const words = firstWords(q.vignette, 8).replace(/…$/, "");
+    const n = esapNumber(q);
+    const src = "ESAP_2026_fk39g9hhj.pdf#search=" + encodeURIComponent(words) + "&phrase=true";
+
+    if (label) label.textContent = "ESAP 2026 · Question " + n;
+    if (hint) {
+      hint.textContent = "Searching for “" + words + "”. If it opens at page 1, use the PDF's own search box with those words — the iPhone preview does not honour the jump.";
+    }
+    if (ext) ext.href = src;
+    frame.src = src;
+    overlay.hidden = false;
+  }
+
+  function closePdf() {
+    const overlay = document.getElementById("pdf-overlay");
+    const frame = document.getElementById("pdf-frame");
+    if (overlay) overlay.hidden = true;
+    if (frame) frame.src = "about:blank";
   }
 
   function cardHtml(c) {
@@ -1357,8 +1404,7 @@
       '<p class="verdict ' + (a.correct ? "ok" : "no") + '">' + (a.correct ? "Correct" : "Incorrect") + '</p>' +
       '<p class="answer-line"><b>' + esc(q.answer) + ')</b> ' + esc(correctText) + '</p>' +
       (q.why ? '<p class="why">' + esc(q.why) + '</p>' : '') +
-      '<p class="ref-line"><a class="ref-link" href="#" data-action="open-ref" data-id="' + esc(q.id) + '">' +
-      esc(q.source || "Question") + ' · open this question in the bank →</a></p>' +
+      '<p class="ref-line">' + refLink(q) + '</p>' +
       (q.ref ? '<p class="ref">' + esc(q.ref) + '</p>' : '') +
       (training
         ? '<button class="btn primary wide" data-action="next-question">Next question</button>'
@@ -2509,6 +2555,13 @@
       window.scrollTo({ top: 0 });
       return;
     }
+    if (action === "open-pdf") {
+      e.preventDefault();
+      const q = getQuestion(el.dataset.id);
+      if (!q) return;
+      openPdf(q);
+      return;
+    }
     if (action === "open-ref") {
       e.preventDefault();
       const id = el.dataset.id;
@@ -3355,6 +3408,9 @@
 
     const buildTag = document.getElementById("build-tag");
     if (buildTag) buildTag.textContent = "build " + BUILD;
+
+    const pdfClose = document.getElementById("pdf-close");
+    if (pdfClose) pdfClose.addEventListener("click", closePdf);
 
     render();
     startSync();
