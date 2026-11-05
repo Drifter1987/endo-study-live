@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104f";
+  const BUILD = "20261104g";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -633,6 +633,8 @@
     bankFilter: "all",
     bankSection: "all",
     session: null,
+    pausedSession: null,
+    highlightId: null,
     clock: null
   };
 
@@ -688,6 +690,23 @@
     renderChrome();
     syncClock();
     refreshSyncUI();
+    focusReference();
+  }
+
+  /* Bring a question that was jumped to into view, then let the glow fade. */
+  function focusReference() {
+    if (!ui.highlightId) return;
+    const el = document.getElementById("ref-target");
+    ui.highlightId = null;
+    if (!el) return;
+    try {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    } catch (e) {
+      window.scrollTo(0, el.offsetTop - 80);
+    }
+    setTimeout(function () {
+      el.classList.remove("ref-target");
+    }, 3600);
   }
 
   function formatStamp(ms) {
@@ -1338,6 +1357,8 @@
       '<p class="verdict ' + (a.correct ? "ok" : "no") + '">' + (a.correct ? "Correct" : "Incorrect") + '</p>' +
       '<p class="answer-line"><b>' + esc(q.answer) + ')</b> ' + esc(correctText) + '</p>' +
       (q.why ? '<p class="why">' + esc(q.why) + '</p>' : '') +
+      '<p class="ref-line"><a class="ref-link" href="#" data-action="open-ref" data-id="' + esc(q.id) + '">' +
+      esc(q.source || "Question") + ' · open this question in the bank →</a></p>' +
       (q.ref ? '<p class="ref">' + esc(q.ref) + '</p>' : '') +
       (training
         ? '<button class="btn primary wide" data-action="next-question">Next question</button>'
@@ -1500,13 +1521,15 @@
       : "not attempted";
 
     return '<div class="row between">' +
-      '<button class="btn ghost" data-action="close-detail">‹ Questions</button>' +
+      '<button class="btn ghost" data-action="close-detail">' +
+      (ui.pausedSession ? "‹ Back to session" : "‹ Questions") + '</button>' +
       '<div class="row">' +
       cardButton(q.id) +
       '<button class="btn ghost" data-action="toggle-flag" data-id="' + esc(q.id) + '">' + (p.flagged ? "Unflag" : "Flag") + '</button>' +
       '<button class="btn" data-action="edit-question" data-id="' + esc(q.id) + '">Edit</button>' +
       '</div></div>' +
-      '<section class="card" style="margin-top:10px">' +
+      '<section class="card' + (ui.highlightId === q.id ? " ref-target" : "") + '"' +
+      (ui.highlightId === q.id ? ' id="ref-target"' : "") + ' style="margin-top:10px">' +
       '<div class="row between"><span class="tag">' + esc(sectionName(q.section)) + '</span>' +
       '<span class="muted small">' + esc(q.source ? q.source + ' · ' : '') + esc(dateLabel(p.due)) + '</span></div>' +
       '<div class="vignette">' + esc(q.vignette) + '</div>' +
@@ -2486,9 +2509,37 @@
       window.scrollTo({ top: 0 });
       return;
     }
+    if (action === "open-ref") {
+      e.preventDefault();
+      const id = el.dataset.id;
+      if (!getQuestion(id)) {
+        toast("That question is no longer in the bank");
+        return;
+      }
+      if (ui.session && !ui.session.finished) {
+        ui.pausedSession = ui.session;
+        ui.session = null;
+        if (ui.clock) {
+          clearInterval(ui.clock);
+          ui.clock = null;
+        }
+        toast("Session paused — Back returns to it");
+      }
+      ui.detailId = id;
+      ui.editingId = null;
+      ui.tab = "bank";
+      ui.highlightId = id;
+      render();
+      return;
+    }
     if (action === "close-detail") {
       ui.detailId = null;
       ui.editingId = null;
+      if (ui.pausedSession) {
+        ui.session = ui.pausedSession;
+        ui.pausedSession = null;
+        ui.tab = "study";
+      }
       render();
       return;
     }
