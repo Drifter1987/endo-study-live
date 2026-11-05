@@ -166,10 +166,15 @@
     return true;
   }
 
+  const pageCache = {};
+
   async function pageInfo(p) {
+    if (pageCache[p]) return pageCache[p];
     const page = await doc.getPage(p);
     const items = await itemsFor(page);
-    return { page: p, items: items, text: items.map(function (i) { return i.str; }).join(" ") };
+    const info = { page: p, items: items, text: items.map(function (i) { return i.str; }).join(" ") };
+    pageCache[p] = info;
+    return info;
   }
 
   function mentionsNumber(rawText, n) {
@@ -182,7 +187,7 @@
   /* Scans every page for a phrase; optionally demands the question number too. */
   async function findPhrase(phrase, needNumber, label2) {
     const needle = norm(phrase);
-    if (needle.length < 8) return null;
+    if (needle.length < 2) return null;
 
     for (let p = 1; p <= doc.numPages; p++) {
       strip.textContent = label2 + " — page " + p + " of " + doc.numPages;
@@ -241,19 +246,27 @@
   function wireSearch() {
     const run = function () {
       const q = (findInput.value || "").trim();
-      if (!q || !doc) return;
+      if (!q) {
+        strip.textContent = "Type a word or phrase to search for.";
+        return;
+      }
+      if (!doc) {
+        strip.textContent = "Still opening the book — try again in a moment.";
+        return;
+      }
       findBtn.disabled = true;
-      findPhrase(q, false, "Searching").then(function (hit) {
+      strip.textContent = "Searching for “" + q + "”…";
+      findPhrase(q, false, "Searching for “" + q + "”").then(function (hit) {
         findBtn.disabled = false;
         if (!hit) {
           strip.textContent = "Nothing found for “" + q + "”.";
           return;
         }
         jump(hit.page, hit.range);
-        strip.textContent = "Found on page " + hit.page + " — highlighted.";
-      }, function () {
+        strip.textContent = "Found “" + q + "” on page " + hit.page + " — highlighted.";
+      }, function (err) {
         findBtn.disabled = false;
-        strip.textContent = "Search failed.";
+        strip.textContent = "Search failed: " + (err && err.message ? err.message : err);
       });
     };
 
