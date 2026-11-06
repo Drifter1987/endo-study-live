@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104n";
+  const BUILD = "20261106a";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -254,6 +254,137 @@
     const frame = document.getElementById("pdf-frame");
     if (overlay) overlay.hidden = true;
     if (frame) frame.src = "about:blank";
+  }
+
+  /* The book is 16.6 MB and never changes: the service worker keeps it on the
+     device. This panel shows whether it is already stored and lets it be
+     fetched ahead of time, so the first reference opens at once. */
+  function renderPdfCard() {
+    return '<section class="card"><h3>ESAP 2026 PDF</h3>' +
+      '<div class="kv"><span>Saved on this device</span><span id="pdf-status">checking…</span></div>' +
+      '<p class="muted small" style="margin:8px 0 0">The full book (16.6 MB) is kept on this device after it has been opened once, so a reference opens straight away and keeps working without a connection.</p>' +
+      '<button class="btn ghost wide" id="pdf-save" data-action="save-pdf" style="margin-top:10px">Save the PDF now</button>' +
+      '</section>';
+  }
+
+  function paintPdfStatus() {
+    const el = document.getElementById("pdf-status");
+    if (!el) return;
+    if (!("serviceWorker" in navigator)) {
+      el.textContent = "browser cache only";
+      return;
+    }
+    if (!navigator.serviceWorker.controller) {
+      el.textContent = "not saved yet";
+      return;
+    }
+    if (typeof MessageChannel !== "function") {
+      el.textContent = "—";
+      return;
+    }
+    const channel = new MessageChannel();
+    let done = false;
+    const finish = function (text) {
+      if (done) return;
+      done = true;
+      el.textContent = text;
+    };
+    channel.port1.onmessage = function (event) {
+      const data = event.data || {};
+      if (!data.cached) {
+        finish("not saved yet");
+        return;
+      }
+      finish(data.bytes ? "saved · " + Math.round(data.bytes / 1048576) + " MB" : "saved");
+    };
+    try {
+      navigator.serviceWorker.controller.postMessage({ type: "book-status" }, [channel.port2]);
+    } catch (err) {
+      finish("—");
+      return;
+    }
+    setTimeout(function () { finish("—"); }, 2000);
+  }
+
+  let pdfJob = null;
+
+  function savePdf() {
+    if (pdfJob) {
+      toast("The PDF is still downloading…");
+      return;
+    }
+    if (!navigator.onLine) {
+      toast("Connect once to save the PDF");
+      return;
+    }
+
+    const btn = document.getElementById("pdf-save");
+    const status = document.getElementById("pdf-status");
+    const xhr = new XMLHttpRequest();
+    pdfJob = xhr;
+
+    xhr.open("GET", "ESAP_2026_fk39g9hhj.pdf", true);
+    xhr.responseType = "arraybuffer";
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Downloading…";
+    }
+
+    const reset = function () {
+      pdfJob = null;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Save the PDF now";
+      }
+    };
+
+    xhr.onprogress = function (e) {
+      if (!e.lengthComputable || !e.total || !status) return;
+      status.textContent = Math.min(100, Math.round((e.loaded / e.total) * 100)) + "%";
+    };
+
+    xhr.onload = function () {
+      reset();
+      if (xhr.status === 200 || xhr.status === 0) {
+        if (status) status.textContent = "saved";
+        toast("The PDF is saved on this device");
+        return;
+      }
+      if (status) status.textContent = "not saved yet";
+      toast("Could not save the PDF (HTTP " + xhr.status + ")");
+    };
+
+    xhr.onerror = function () {
+      reset();
+      if (status) status.textContent = "not saved yet";
+      toast("Could not save the PDF — check the connection");
+    };
+
+    xhr.send();
+  }
+
+  /* Warm the PDF.js scripts in the background so the first reference does not
+     wait for them. */
+  function warmPdfEngine() {
+    if (!("serviceWorker" in navigator)) return;
+    if (!navigator.onLine) return;
+    if (navigator.connection && navigator.connection.saveData) return;
+
+    const start = function () {
+      const ping = function (worker) {
+        if (worker) worker.postMessage({ type: "warm-reader" });
+      };
+      if (navigator.serviceWorker.controller) {
+        ping(navigator.serviceWorker.controller);
+        return;
+      }
+      navigator.serviceWorker.ready.then(function (reg) {
+        ping(reg.active);
+      }).catch(function () {});
+    };
+
+    setTimeout(start, 7000);
   }
 
   function cardHtml(c) {
@@ -747,6 +878,7 @@
     syncClock();
     refreshSyncUI();
     focusReference();
+    if (!ui.session && ui.tab === "more") paintPdfStatus();
   }
 
   /* Bring a question that was jumped to into view, then let the glow fade. */
@@ -1937,6 +2069,8 @@
 
     html += renderSyncCard();
 
+    html += renderPdfCard();
+
     html += '<details class="fold card"><summary>Backup and restore</summary>' +
       '<div class="stack">' +
       '<button class="btn wide" data-action="export-json">Export all (JSON)</button>' +
@@ -2599,6 +2733,11 @@
       ui.tab = "bank";
       render();
       window.scrollTo({ top: 0 });
+      return;
+    }
+    if (action === "save-pdf") {
+      e.preventDefault();
+      savePdf();
       return;
     }
     if (action === "open-pdf") {
@@ -3464,6 +3603,7 @@
 
     render();
     startSync();
+    warmPdfEngine();
   }
 
   if (document.readyState === "loading") {

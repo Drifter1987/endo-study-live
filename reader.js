@@ -13,6 +13,8 @@
   const ind = document.getElementById("page-ind");
   const findInput = document.getElementById("find-input");
   const findBtn = document.getElementById("find-btn");
+  const loadbar = document.getElementById("loadbar");
+  const loadfill = document.getElementById("loadfill");
 
   document.getElementById("close").addEventListener("click", function () {
     if (window.parent && window.parent !== window) {
@@ -30,14 +32,17 @@
   pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
 
   let doc = null;
+  let ratio = 1.414;
   const sheets = [];
+  const pageCache = {};
+
   const io = new IntersectionObserver(function (entries) {
     entries.forEach(function (e) {
       if (!e.isIntersecting) return;
       const s = sheets.filter(function (x) { return x.wrap === e.target; })[0];
-      if (s && !s.rendered) renderSheet(s);
+      if (s) renderSheet(s);
     });
-  }, { root: pagesEl, rootMargin: "900px 0px" });
+  }, { root: pagesEl, rootMargin: "1200px 0px" });
 
   function norm(t) {
     return String(t || "")
@@ -47,9 +52,21 @@
       .trim();
   }
 
-  function makeSheet(n) {
+  function mb(n) {
+    return (n / 1048576).toFixed(1) + " MB";
+  }
+
+  /* Every page is given its height straight away, worked out from page 1, so
+     the scroll area is the right size and a jump lands on the first try. */
+  function sheetHeight() {
+    const width = Math.max(220, pagesEl.clientWidth - 16);
+    return Math.round(width * ratio);
+  }
+
+  function makeSheet(n, h) {
     const wrap = document.createElement("div");
     wrap.className = "sheet";
+    wrap.style.height = (h || sheetHeight()) + "px";
     const canvas = document.createElement("canvas");
     const marks = document.createElement("div");
     marks.className = "marks";
@@ -62,7 +79,17 @@
     wrap.appendChild(tag);
     pagesEl.appendChild(wrap);
 
-    const s = { n: n, wrap: wrap, canvas: canvas, marks: marks, rendered: false, scale: 1, raw: null, hit: null };
+    const s = {
+      n: n,
+      wrap: wrap,
+      canvas: canvas,
+      marks: marks,
+      rendered: false,
+      busy: false,
+      scale: 1,
+      raw: null,
+      hit: null
+    };
     sheets.push(s);
     io.observe(wrap);
     return s;
@@ -79,7 +106,8 @@
   }
 
   async function renderSheet(view) {
-    view.rendered = true;
+    if (view.rendered || view.busy) return;
+    view.busy = true;
     try {
       const page = await doc.getPage(view.n);
       const base = page.getViewport({ scale: 1 });
@@ -100,9 +128,13 @@
       await page.render({ canvasContext: ctx, viewport: vp }).promise;
 
       if (!view.raw) view.raw = await itemsFor(page);
+      view.rendered = true;
       if (view.hit) markSheet(view);
     } catch (e) {
-      strip.textContent = "Page " + view.n + " could not be drawn.";
+      view.rendered = false;
+      if (strip) strip.textContent = "Page " + view.n + " could not be drawn.";
+    } finally {
+      view.busy = false;
     }
   }
 
@@ -124,7 +156,7 @@
 
     const first = view.marks.firstChild;
     if (first) {
-      [160, 700, 1500].forEach(function (t) {
+      [200, 700, 1500].forEach(function (t) {
         setTimeout(function () {
           try { first.scrollIntoView({ block: "center" }); } catch (e) { /* ignore */ }
         }, t);
@@ -166,13 +198,16 @@
     return true;
   }
 
-  const pageCache = {};
-
   async function pageInfo(p) {
     if (pageCache[p]) return pageCache[p];
     const page = await doc.getPage(p);
     const items = await itemsFor(page);
-    const info = { page: p, items: items, text: items.map(function (i) { return i.str; }).join(" ") };
+    const info = {
+      page: p,
+      items: items,
+      text: items.map(function (i) { return i.str; }).join(" ")
+    };
+    info.nm = norm(info.text);
     pageCache[p] = info;
     return info;
   }
@@ -184,30 +219,38 @@
     return false;
   }
 
-  /* Scans every page for a phrase; optionally demands the question number too. */
+  /* Scans the book for a phrase eight pages at a time, which is several times
+     faster than one page after another. */
   async function findPhrase(phrase, needNumber, label2) {
     const needle = norm(phrase);
-    if (needle.length < 2) return null;
+    if (needle.length < 2 || !doc) return null;
 
-    for (let p = 1; p <= doc.numPages; p++) {
-      strip.textContent = label2 + " — page " + p + " of " + doc.numPages;
-      let info;
-      try {
-        info = await pageInfo(p);
-      } catch (e) {
-        continue;
+    const total = doc.numPages;
+
+    for (let p = 1; p <= total; p += 8) {
+      const upto = Math.min(p + 7, total);
+      const batch = [];
+      for (let n = p; n <= upto; n++) batch.push(n);
+
+      if (strip) strip.textContent = label2 + " — searched " + (p - 1) + " of " + total + " pages";
+
+      const infos = await Promise.all(batch.map(function (n) {
+        return pageInfo(n).catch(function () { return null; });
+      }));
+
+      for (let k = 0; k < infos.length; k++) {
+        const info = infos[k];
+        if (!info) continue;
+        if (info.nm.indexOf(needle) === -1) continue;
+        if (needNumber && want && !mentionsNumber(info.text, want)) continue;
+
+        const normed = info.items.map(function (i) { return { str: norm(i.str) }; });
+        const at2 = normed.map(function (i) { return i.str; }).join(" ").indexOf(needle);
+        const range = at2 === -1 ? null : rangeFor(normed, at2, needle.length);
+        const sheet = sheets[info.page - 1];
+        if (sheet && !sheet.raw) sheet.raw = info.items;
+        return { page: info.page, range: range };
       }
-      const text = norm(info.text);
-      const at = text.indexOf(needle);
-      if (at === -1) continue;
-      if (needNumber && want && !mentionsNumber(info.text, want)) continue;
-
-      const normed = info.items.map(function (i) { return { str: norm(i.str) }; });
-      const at2 = normed.map(function (i) { return i.str; }).join(" ").indexOf(needle);
-      const range = at2 === -1 ? null : rangeFor(normed, at2, needle.length);
-      const sheet = sheets[p - 1];
-      if (sheet) sheet.raw = sheet.raw || info.items;
-      return { page: p, range: range };
     }
     return null;
   }
@@ -237,8 +280,6 @@
     if (!found.length) return false;
 
     const hit = found[0];
-    const sheet = sheets[hit.page - 1];
-    if (sheet) sheet.raw = sheet.raw || null;
     jump(hit.page, hit.range);
     return true;
   }
@@ -279,28 +320,104 @@
     });
   }
 
-  async function start() {
-    const t0 = performance.now();
-    try {
-      doc = await pdfjsLib.getDocument({ url: FILE, disableRange: true }).promise;
-    } catch (e) {
-      strip.textContent = "Could not open the PDF: " + (e && e.message ? e.message : e);
+  /* One download with a progress bar; the service worker keeps the file, so
+     the next open reads it from the device instead of the network. */
+  function loadBook() {
+    return new Promise(function (resolve, reject) {
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", FILE, true);
+      xhr.responseType = "arraybuffer";
+
+      xhr.onprogress = function (e) {
+        if (!e.lengthComputable || !e.total) {
+          if (e.loaded) strip.textContent = "Downloading the book — " + mb(e.loaded);
+          return;
+        }
+        const pct = Math.min(100, Math.round((e.loaded / e.total) * 100));
+        if (loadbar) loadbar.hidden = false;
+        if (loadfill) loadfill.style.width = pct + "%";
+        strip.textContent = "Downloading the book — " + pct + "% (" +
+          mb(e.loaded) + " of " + mb(e.total) + ")";
+      };
+
+      xhr.onload = function () {
+        if (xhr.status !== 200 && xhr.status !== 0) {
+          reject(new Error("HTTP " + xhr.status));
+          return;
+        }
+        resolve(new Uint8Array(xhr.response));
+      };
+
+      xhr.onerror = function () {
+        reject(new Error(navigator.onLine ? "network error" : "offline"));
+      };
+
+      xhr.onabort = function () {
+        reject(new Error("cancelled"));
+      };
+
+      xhr.send();
+    });
+  }
+
+  function showError(e) {
+    if (loadbar) loadbar.hidden = true;
+    if (!navigator.onLine) {
+      strip.textContent = "This device has no connection and the book is not saved yet. " +
+        "Open it once while online, or use More → ESAP 2026 PDF → Save the PDF now.";
       return;
     }
+    strip.textContent = "Could not open the book: " + (e && e.message ? e.message : e);
+  }
+
+  async function start() {
+    const t0 = performance.now();
+
+    let bytes;
+    try {
+      bytes = await loadBook();
+    } catch (e) {
+      showError(e);
+      return;
+    }
+
+    if (loadbar) loadbar.hidden = true;
+    strip.textContent = "Opening the book…";
+
+    try {
+      doc = await pdfjsLib.getDocument({ data: bytes, disableRange: true }).promise;
+    } catch (e) {
+      showError(e);
+      return;
+    }
+    bytes = null;
+
     const opened = Math.round(performance.now() - t0);
+
+    const first = await doc.getPage(1);
+    const base = first.getViewport({ scale: 1 });
+    ratio = base.height / base.width;
 
     label.textContent = "ESAP 2026";
     ind.textContent = "1 / " + doc.numPages;
-    for (let n = 1; n <= doc.numPages; n++) makeSheet(n);
 
+    const h = sheetHeight();
+    for (let n = 1; n <= doc.numPages; n++) makeSheet(n, h);
+
+    let ticking = false;
     pagesEl.addEventListener("scroll", function () {
-      const top = pagesEl.getBoundingClientRect().top;
-      let cur = 1;
-      sheets.forEach(function (s) {
-        const r = s.wrap.getBoundingClientRect();
-        if (r.top - top <= 60) cur = s.n;
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        ticking = false;
+        const top = pagesEl.getBoundingClientRect().top;
+        let cur = 1;
+        sheets.forEach(function (s) {
+          const r = s.wrap.getBoundingClientRect();
+          if (r.top - top <= 60) cur = s.n;
+        });
+        ind.textContent = cur + " / " + doc.numPages;
       });
-      ind.textContent = cur + " / " + doc.numPages;
     });
 
     wireSearch();

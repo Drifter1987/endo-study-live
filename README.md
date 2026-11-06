@@ -33,6 +33,28 @@ Today, the study plan, Study, grading, the timed mock, Questions, Learn, More �
 caption under each screen, a progress bar and chapter buttons for jumping. **Watch the app tour**
 on Today and in **More → How this app works** opens it.
 
+## Speed, cache and offline
+
+The app carries a service worker (`sw.js`). It runs in Safari on iOS 11.3 and later, Chrome and
+Edge on desktop and Android, Firefox, and desktop Safari. On the first visit it saves the app's own
+files (about 300 KB) in the browser's cache storage, which belongs to this device and this site —
+nothing is uploaded anywhere.
+
+- **Pages and code** come from the network first, so a new build shows up on the next visit. If the
+  network takes longer than 2.5 seconds, or there is no connection, the saved copy opens instead.
+- **The ESAP book and PDF.js** are served from the device first. They never change, so a second
+  open does not touch the network at all.
+- **The book** is 16.6 MB. It is stored the first time a reference is opened, or sooner if you tap
+  **More → ESAP 2026 PDF → Save the PDF now**, which shows the percentage as it downloads.
+- **PDF.js** (1.3 MB) is fetched quietly in the background a few seconds after the app opens, so
+  the first reference does not wait for it.
+
+Storage per browser: Chrome and Edge allow gigabytes per site in desktop and plenty on Android;
+Safari gives a web app a large share of free disk, but iOS may clear a site's cache if the site has
+not been opened for about a week. Nothing is lost when that happens — progress lives in
+`localStorage` and, if the live copy is set up, in Firebase — the book is simply downloaded again.
+Adding the site to the Home Screen makes iOS keep it more readily.
+
 ## One live copy
 
 Progress can live in a free **Firebase Realtime Database**, so every phone that opens the site
@@ -161,6 +183,11 @@ data/esap-03.js     ESAP 2026 questions 61-90
 data/esap-04.js     ESAP 2026 questions 91-120
 data/free-01.js     24 written ITE-style questions from the free guidelines
 data/questions.js   10 original starter questions (retired once the bank is present)
+reader.html         in-app reader for the ESAP book
+reader.js           renders the book, searches it, jumps to a question
+sw.js               service worker: keeps the app and the book on the device
+vendor/             PDF.js 3.11.174, the reader's PDF engine
+ESAP_2026_fk39g9hhj.pdf   the book itself
 ```
 
 ## Note on content

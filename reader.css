@@ -121,3 +121,20 @@ body { display: flex; flex-direction: column; }
   font-weight: 600;
   cursor: pointer;
 }
+
+
+/* ---------- first-load progress ---------- */
+.loadbar {
+  height: 3px;
+  background: #1a1526;
+  overflow: hidden;
+}
+
+.loadbar[hidden] { display: none; }
+
+.loadfill {
+  width: 0%;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
