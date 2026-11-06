@@ -33,7 +33,7 @@ jobs:
         run: |
           mkdir -p _site
           cp index.html styles.css app.js tour.html tour.css tour.js _site/
-          cp reader.html reader.css reader.js QUESTIONS.md _site/
+          cp reader.html reader.css reader.js QUESTIONS.md sw.js _site/
           cp ESAP_2026_fk39g9hhj.pdf _site/
           cp -R data _site/data
           cp -R vendor _site/vendor

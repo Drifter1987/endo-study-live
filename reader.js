@@ -282,7 +282,7 @@
   async function start() {
     const t0 = performance.now();
     try {
-      doc = await pdfjsLib.getDocument(FILE).promise;
+      doc = await pdfjsLib.getDocument({ url: FILE, disableRange: true }).promise;
     } catch (e) {
       strip.textContent = "Could not open the PDF: " + (e && e.message ? e.message : e);
       return;
