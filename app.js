@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261104l";
+  const BUILD = "20261104m";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -50,6 +50,14 @@
 
   function pad2(n) {
     return (n < 10 ? "0" : "") + n;
+  }
+
+  /* Some condensed cases lost their closing question line; make sure one is there. */
+  function withAsk(text) {
+    const t = String(text || "").trim();
+    if (!t) return t;
+    if (t.indexOf("?") !== -1) return t;
+    return t + "\n\nWhich is the best answer?";
   }
 
   function todayKey(d) {
@@ -352,7 +360,7 @@
       out.push({
         id: "esap-" + n,
         section: SECTION_BY_ID[q.section] ? q.section : "unknown",
-        vignette: String(q.vignette),
+        vignette: withAsk(String(q.vignette)),
         options: options,
         answer: answer,
         why: String(q.why || ""),
@@ -377,7 +385,7 @@
       out.push({
         id: "free-" + n,
         section: SECTION_BY_ID[q.section] ? q.section : "unknown",
-        vignette: String(q.vignette),
+        vignette: withAsk(String(q.vignette)),
         options: options,
         answer: answer,
         why: String(q.why || ""),
@@ -1379,6 +1387,7 @@
     }
 
     html += '<div class="row between" style="margin-top:14px">' +
+      '<button class="btn ghost small" data-action="change-question">Change</button>' +
       '<button class="btn ghost small" data-action="end-session">End session</button>' +
       '<button class="btn ghost small" data-action="toggle-flag" data-id="' + esc(q.id) + '">' +
       (p.flagged ? "Unflag" : "Flag") + '</button>' +
@@ -2267,8 +2276,8 @@
   /* ---------------- navigation ---------------- */
   function goTab(tab) {
     if (ui.session && tab !== "study") {
-      const ok = window.confirm("Leave this session? Unanswered questions are dropped.");
-      if (!ok) return;
+      /* keep the session for when Study is opened again */
+      if (!ui.session.finished) ui.pausedSession = ui.session;
       ui.session = null;
       if (ui.clock) {
         clearInterval(ui.clock);
@@ -2276,6 +2285,10 @@
       }
     }
     ui.tab = tab;
+    if (tab === "study" && ui.pausedSession) {
+      ui.session = ui.pausedSession;
+      ui.pausedSession = null;
+    }
     try {
       history.replaceState(null, "", "#" + tab);
     } catch (err) { /* file:// in some webviews forbids this */ }
@@ -2483,6 +2496,38 @@
       return;
     }
 
+    if (action === "change-question") {
+      const s = ui.session;
+      if (!s || s.finished) return;
+      const cur = s.ids[s.i];
+      if (cur) {
+        const p = prog(cur);
+        p.day = todayKey();
+        p.repeatToday = false;
+      }
+
+      const taken = {};
+      s.ids.forEach(function (id) { taken[id] = true; });
+
+      let pool = state.questions.filter(function (q) {
+        return !taken[q.id] && prog(q.id).attempts === 0;
+      });
+      if (!pool.length) {
+        pool = state.questions.filter(function (q) { return !taken[q.id]; });
+      }
+      if (!pool.length) {
+        toast("No other questions to swap in");
+        return;
+      }
+
+      const next = pool[Math.floor(Math.random() * pool.length)];
+      s.ids[s.i] = next.id;
+      delete s.answered[next.id];
+      save();
+      render();
+      window.scrollTo({ top: 0 });
+      return;
+    }
     if (action === "end-session") {
       if (ui.session && !ui.session.finished) finishSession();
       if (ui.clock) {
