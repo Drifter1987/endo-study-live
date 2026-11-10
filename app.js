@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261106e";
+  const BUILD = "20261106f";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -237,6 +237,14 @@
   function esapNumber(q) {
     const m = /^esap-(\d+)$/.exec(q.id);
     return m ? Number(m[1]) : null;
+  }
+
+  /* Q54 for the ESAP set, W12 for the written set, empty for custom cards. */
+  function questionLabel(q) {
+    const n = esapNumber(q);
+    if (n) return "Q" + n;
+    const m = /^free-(\d+)$/.exec(q.id);
+    return m ? "W" + m[1] : "";
   }
 
   function refLink(q) {
@@ -1561,7 +1569,7 @@
       '<div class="row between">' +
       '<span class="tag">' + esc(sectionName(q.section)) + '</span>' +
       '<div class="row" style="gap:8px">' +
-      '<span class="muted small mono">' + (esapNumber(q) ? "Q" + esapNumber(q) + " · " : "") +
+      '<span class="muted small mono">' + (questionLabel(q) ? questionLabel(q) + " · " : "") +
       (s.i + 1) + ' / ' + s.ids.length + '</span>' +
       cardButton(q.id) +
       '</div></div>';
@@ -1679,7 +1687,7 @@
         const q = getQuestion(id);
         if (!q) return;
         html += '<button class="list-row" data-action="open-detail" data-id="' + esc(id) + '">' +
-          '<span class="tag">' + esc(sectionName(q.section)) + '</span>' +
+          '<span class="tag">' + esc(questionLabel(q) || sectionName(q.section)) + '</span>' +
           '<span class="snippet">' + esc(snippet(q.vignette, 80)) + '</span></button>';
       });
       html += '</div></section>';
@@ -1754,8 +1762,8 @@
         '<span class="tag">' + esc(sectionName(item.section)) + '</span>' +
         '<span class="snippet">' + esc(snippet(item.vignette, 95)) +
         (p.flagged ? ' <span class="muted">⚑</span>' : '') + '</span>' +
-        '<span class="row-meta">' + (esapNumber(item) ? "Q" + esapNumber(item) + "<br>" : "") +
-        accTxt + ' · ' + (started ? esc(dateLabel(p.due)) : "new") + '</span>' +
+        '<span class="row-meta">' + (questionLabel(item) ? esc(questionLabel(item)) + "<br>" : "") +
+        accTxt + (started ? ' · ' + esc(dateLabel(p.due)) : "") + '</span>' +
         '</button>';
     });
     html += '</div>';
@@ -1796,7 +1804,7 @@
       '<section class="card' + (ui.highlightId === q.id ? " ref-target" : "") + '"' +
       (ui.highlightId === q.id ? ' id="ref-target"' : "") + ' style="margin-top:10px">' +
       '<div class="row between"><span class="tag">' + esc(sectionName(q.section)) + '</span>' +
-      '<span class="muted small">' + (esapNumber(q) ? "Question " + esapNumber(q) + " · " : "") +
+      '<span class="muted small">' + (questionLabel(q) ? questionLabel(q) + " · " : "") +
       esc(q.source ? q.source + ' · ' : '') +
       (state.progress[q.id] && (p.attempts || p.reps) ? esc(dateLabel(p.due)) : "not started") + '</span></div>' +
       '<div class="vignette">' + esc(q.vignette) + '</div>' +
@@ -1816,7 +1824,8 @@
       '<div class="kv"><span>Lapses</span><span>' + p.lapses + '</span></div>' +
       '<div class="kv"><span>Interval</span><span>' + (p.interval ? p.interval + " days" : "learning") + '</span></div>' +
       '<div class="kv"><span>Ease</span><span>' + p.ease.toFixed(2) + '</span></div>' +
-      '<div class="kv"><span>Due</span><span>' + esc(fmtDate(p.due)) + '</span></div>' +
+      '<div class="kv"><span>Due</span><span>' +
+      (p.attempts || p.reps ? esc(fmtDate(p.due)) : "not started") + '</span></div>' +
       '</section>' +
       '<div class="stack">' +
       '<button class="btn ghost wide danger" data-action="delete-question" data-id="' + esc(q.id) + '">Delete question</button>' +
@@ -2744,7 +2753,25 @@
       return;
     }
     if (action === "end-session") {
-      if (ui.session && !ui.session.finished) finishSession();
+      const s = ui.session;
+      const answered = !!(s && s.log && s.log.length);
+
+      if (s && !s.finished) {
+        finishSession();
+        /* Leaving a session part-way still shows what was done, rather than
+           dropping straight back to Today with no summary. */
+        if (answered && s.kind === "practice") {
+          s.i = s.ids.length;
+          if (ui.clock) {
+            clearInterval(ui.clock);
+            ui.clock = null;
+          }
+          render();
+          window.scrollTo({ top: 0 });
+          return;
+        }
+      }
+
       if (ui.clock) {
         clearInterval(ui.clock);
         ui.clock = null;
