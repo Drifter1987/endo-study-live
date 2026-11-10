@@ -146,7 +146,7 @@
         name: "2 · Weak areas",
         from: addDays(today, p1 + 1),
         to: addDays(today, p1 + p2),
-        what: "Only sections under 60% in Stats: the guideline first, then the named Endotext chapter, then re-test."
+        what: "Only sections under 60% in Study → Your progress: the guideline first, then the named Endotext chapter, then re-test."
       },
       {
         name: "3 · Mock season",
@@ -297,7 +297,7 @@
     const el = document.getElementById("pdf-status");
     if (!el) return;
     if (!("serviceWorker" in navigator)) {
-      el.textContent = "browser cache only";
+      el.textContent = "not stored (no offline cache in this browser)";
       return;
     }
     if (!navigator.serviceWorker.controller) {
@@ -638,6 +638,16 @@
       });
 
       mergeBankInto(s, bank);
+
+      /* A card that has never been answered is not "due" — its stored date is
+         just the day it was first created. Keep it out of the past so it does
+         not read as overdue. */
+      const today = todayKey();
+      Object.keys(s.progress).forEach(function (id) {
+        const p = s.progress[id];
+        if (!p || p.attempts || p.reps) return;
+        if (p.due && p.due < today) p.due = today;
+      });
 
       /* A flash card carries its own copy of the case; keep that copy in step
          with the bank so a fixed question is complete there too. */
@@ -1551,7 +1561,8 @@
       '<div class="row between">' +
       '<span class="tag">' + esc(sectionName(q.section)) + '</span>' +
       '<div class="row" style="gap:8px">' +
-      '<span class="muted small mono">' + (s.i + 1) + ' / ' + s.ids.length + '</span>' +
+      '<span class="muted small mono">' + (esapNumber(q) ? "Q" + esapNumber(q) + " · " : "") +
+      (s.i + 1) + ' / ' + s.ids.length + '</span>' +
       cardButton(q.id) +
       '</div></div>';
 
@@ -1737,12 +1748,14 @@
     html += '<div class="list">';
     list.slice(0, 400).forEach(function (item) {
       const p = prog(item.id);
+      const started = !!state.progress[item.id] && (p.attempts > 0 || p.reps > 0);
       const accTxt = p.attempts ? Math.round((p.correct / p.attempts) * 100) + "%" : (p.reps ? "—" : "new");
       html += '<button class="list-row" data-action="open-detail" data-id="' + esc(item.id) + '">' +
         '<span class="tag">' + esc(sectionName(item.section)) + '</span>' +
         '<span class="snippet">' + esc(snippet(item.vignette, 95)) +
         (p.flagged ? ' <span class="muted">⚑</span>' : '') + '</span>' +
-        '<span class="row-meta">' + accTxt + '<br>' + esc(dateLabel(p.due)) + '</span>' +
+        '<span class="row-meta">' + (esapNumber(item) ? "Q" + esapNumber(item) + "<br>" : "") +
+        accTxt + ' · ' + (started ? esc(dateLabel(p.due)) : "new") + '</span>' +
         '</button>';
     });
     html += '</div>';
@@ -1783,13 +1796,16 @@
       '<section class="card' + (ui.highlightId === q.id ? " ref-target" : "") + '"' +
       (ui.highlightId === q.id ? ' id="ref-target"' : "") + ' style="margin-top:10px">' +
       '<div class="row between"><span class="tag">' + esc(sectionName(q.section)) + '</span>' +
-      '<span class="muted small">' + esc(q.source ? q.source + ' · ' : '') + esc(dateLabel(p.due)) + '</span></div>' +
+      '<span class="muted small">' + (esapNumber(q) ? "Question " + esapNumber(q) + " · " : "") +
+      esc(q.source ? q.source + ' · ' : '') +
+      (state.progress[q.id] && (p.attempts || p.reps) ? esc(dateLabel(p.due)) : "not started") + '</span></div>' +
       '<div class="vignette">' + esc(q.vignette) + '</div>' +
       '<div class="options">' + opts + '</div>' +
       (q.why || q.ref
         ? '<div class="explain">' +
         '<p class="verdict ok">Answer ' + esc(q.answer) + '</p>' +
         (q.why ? '<p class="why">' + esc(q.why) + '</p>' : '') +
+        '<p class="ref-line">' + refLink(q) + '</p>' +
         (q.ref ? '<p class="ref">' + esc(q.ref) + '</p>' : '') +
         '</div>'
         : '') +
@@ -1993,7 +2009,7 @@
       }).join("") +
       '</div></details>';
 
-    html += '<p class="muted small" style="margin:0 0 14px">These eight areas are the whole paper. If a section is weak under <b>Your progress</b> below, filter to it here and read the sources tagged for it.</p>';
+    html += '<p class="muted small" style="margin:0 0 14px">These eight areas are the whole paper. If a section is weak in Study → Your progress, pick it at the top of this tab and read the sources tagged for it.</p>';
 
     if (!list.length) {
       html += '<div class="empty">Everything in this filter is ticked off.</div>';
