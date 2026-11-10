@@ -28,7 +28,8 @@ const SHELL = [
   "data/esap-03.js",
   "data/esap-04.js",
   "data/free-01.js",
-  "data/stems.js"
+  "data/stems.js",
+  "data/verbatim.js"
 ];
 
 const VENDOR = ["vendor/pdf.min.js", "vendor/pdf.worker.min.js"];

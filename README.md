@@ -95,6 +95,10 @@ the ESAP discussion. The full discussion
 and references stay in the book and can be pasted into a question's explanation with
 **Questions → Edit**.
 
+`data/verbatim.js` overrides that condensed text with the book's own case, question and five
+options, verbatim, for every question it holds. The section, the answer key and your whole record
+are untouched: the override only replaces words.
+
 **Set 2 — 24 written questions** (`data/free-01.js`). Free sources do not publish question banks,
 so these are original case vignettes written **to the ITE format and blueprint only** — five
 options, one best answer, no ABIM board trivia — using the free guidelines in the Learn tab as
@@ -184,6 +188,7 @@ data/esap-03.js     ESAP 2026 questions 61-90
 data/esap-04.js     ESAP 2026 questions 91-120
 data/free-01.js     24 written ITE-style questions from the free guidelines
 data/stems.js       the question each ESAP case asks, appended to its vignette
+data/verbatim.js    the book's own wording, question by question, where transcribed
 data/questions.js   10 original starter questions (retired once the bank is present)
 reader.html         in-app reader for the ESAP book
 reader.js           renders the book, searches it, jumps to a question

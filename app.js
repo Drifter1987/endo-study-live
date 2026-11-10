@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261106c";
+  const BUILD = "20261106d";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -64,6 +64,18 @@
   /* The question the case asks. data/stems.js holds the real one for the ESAP
      items whose vignette stops at the laboratory data. */
   const STEMS = window.ESAP_STEMS || {};
+
+  /* The book's own wording, where it is available (data/verbatim.js): the case,
+     its question and its five options replace the condensed version. The
+     section and the answer letter still come from the bank. */
+  const VERBATIM = window.ESAP_VERBATIM || {};
+
+  function verbatimFor(n) {
+    const v = VERBATIM[Number(n)];
+    if (!v || typeof v.q !== "string" || !v.q.trim()) return null;
+    if (!Array.isArray(v.o) || !v.o.length) return null;
+    return v;
+  }
 
   function stemFor(q) {
     const base = String(q.vignette || "").trim();
@@ -502,11 +514,13 @@
       const answer = String(q.answer || "").trim().toUpperCase().slice(0, 1);
       if (!n || !q.vignette || options.length < 2) return;
       if (LETTERS.indexOf(answer) === -1 || LETTERS.indexOf(answer) >= options.length) return;
+      const v = verbatimFor(n);
+      const useVerbatim = v && v.o.length === options.length;
       out.push({
         id: "esap-" + n,
         section: SECTION_BY_ID[q.section] ? q.section : "unknown",
-        vignette: stemFor(q),
-        options: options,
+        vignette: useVerbatim ? v.q.trim() : stemFor(q),
+        options: useVerbatim ? v.o.map(String) : options,
         answer: answer,
         why: String(q.why || ""),
         ref: String(q.ref || ""),
