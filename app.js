@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261106b";
+  const BUILD = "20261106c";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -624,6 +624,23 @@
       });
 
       mergeBankInto(s, bank);
+
+      /* A flash card carries its own copy of the case; keep that copy in step
+         with the bank so a fixed question is complete there too. */
+      if (Array.isArray(s.cards) && s.cards.length) {
+        const byId = {};
+        s.questions.forEach(function (q) { byId[q.id] = q; });
+        s.cards.forEach(function (c) {
+          const q = byId[c.qid];
+          if (!q || q.edited) return;
+          c.section = q.section;
+          c.vignette = q.vignette;
+          c.options = (q.options || []).slice(0, 5);
+          c.answer = q.answer;
+          c.why = q.why || "";
+          c.ref = q.ref || "";
+        });
+      }
     }
 
     return s;
