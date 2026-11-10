@@ -89,7 +89,7 @@ window.ESAP_STEMS = {
   115: "Which treatment should be started?",
   116: "Which of the following is the most likely diagnosis?",
   117: "What is the best initial treatment?",
-  118: "Which deficiency should be treated?",
+  118: "Which of the following should be given?",
   119: "What is the best next step?",
   120: "What is the best next step?"
 };
