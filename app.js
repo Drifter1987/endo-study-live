@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261106d";
+  const BUILD = "20261106e";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
