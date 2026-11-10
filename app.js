@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261106a";
+  const BUILD = "20261106b";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -56,8 +56,22 @@
   function withAsk(text) {
     const t = String(text || "").trim();
     if (!t) return t;
-    if (t.indexOf("?") !== -1) return t;
+    const last = t.split(/\n\n+/).pop().trim();
+    if (last.indexOf("?") !== -1) return t;
     return t + "\n\nWhich is the best answer?";
+  }
+
+  /* The question the case asks. data/stems.js holds the real one for the ESAP
+     items whose vignette stops at the laboratory data. */
+  const STEMS = window.ESAP_STEMS || {};
+
+  function stemFor(q) {
+    const base = String(q.vignette || "").trim();
+    const extra = STEMS[Number(q.n)] || "";
+    if (!extra) return withAsk(base);
+    const last = base.split(/\n\n+/).pop().trim();
+    if (last.indexOf("?") !== -1) return base;
+    return base + "\n\n" + extra;
   }
 
   function todayKey(d) {
@@ -491,7 +505,7 @@
       out.push({
         id: "esap-" + n,
         section: SECTION_BY_ID[q.section] ? q.section : "unknown",
-        vignette: withAsk(String(q.vignette)),
+        vignette: stemFor(q),
         options: options,
         answer: answer,
         why: String(q.why || ""),
@@ -532,6 +546,25 @@
     const have = {};
     s.questions.forEach(function (q) { have[q.id] = true; });
     s.deletedBankIds.forEach(function (id) { have[id] = true; });
+
+    const byId = {};
+    list.forEach(function (q) { byId[q.id] = q; });
+
+    /* Bring the shipped wording up to date on every load: a question that has
+       never been edited takes the current vignette, options and explanation, so
+       a fix to the bank reaches a device that already stored an older copy. */
+    s.questions.forEach(function (q) {
+      const b = byId[q.id];
+      if (!b || q.edited) return;
+      q.section = b.section;
+      q.vignette = b.vignette;
+      q.options = b.options;
+      q.answer = b.answer;
+      q.why = b.why;
+      q.ref = b.ref;
+      q.source = b.source;
+    });
+
     list.forEach(function (q) {
       if (!have[q.id]) {
         s.questions.push(q);
@@ -1829,6 +1862,7 @@
         q.why = why;
         q.ref = ref;
         q.updatedAt = Date.now();
+        q.edited = true;
       }
     } else {
       state.questions.push({
@@ -3600,6 +3634,10 @@
     window.addEventListener("message", function (e) {
       if (e && e.data && e.data.type === "endo-close-reader") closePdf();
     });
+
+    /* Store the copies the bank just refreshed, so a fixed question is written
+       to this device once rather than rebuilt on every launch. */
+    persist();
 
     render();
     startSync();

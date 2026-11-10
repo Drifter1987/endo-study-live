@@ -90,7 +90,8 @@ counts live).
 
 **Set 1 — ESAP 2026, all 120 questions** (`data/esap-01.js` … `esap-04.js`). Each item keeps the
 case's decision-relevant facts, all five options and the correct answer (taken from the ESAP
-answer key), plus a short teaching point summarising the ESAP discussion. The full discussion
+answer key), the question the case asks (`data/stems.js`), plus a short teaching point summarising
+the ESAP discussion. The full discussion
 and references stay in the book and can be pasted into a question's explanation with
 **Questions → Edit**.
 
@@ -182,6 +183,7 @@ data/esap-02.js     ESAP 2026 questions 31-60
 data/esap-03.js     ESAP 2026 questions 61-90
 data/esap-04.js     ESAP 2026 questions 91-120
 data/free-01.js     24 written ITE-style questions from the free guidelines
+data/stems.js       the question each ESAP case asks, appended to its vignette
 data/questions.js   10 original starter questions (retired once the bank is present)
 reader.html         in-app reader for the ESAP book
 reader.js           renders the book, searches it, jumps to a question
