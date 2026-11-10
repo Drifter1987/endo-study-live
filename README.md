@@ -96,7 +96,7 @@ and references stay in the book and can be pasted into a question's explanation 
 **Questions → Edit**.
 
 `data/verbatim.js` overrides that condensed text with the book's own case, question and five
-options, verbatim, for every question it holds. The section, the answer key and your whole record
+options for all 120 questions. The section, the answer key and your whole record
 are untouched: the override only replaces words.
 
 **Set 2 — 24 written questions** (`data/free-01.js`). Free sources do not publish question banks,
