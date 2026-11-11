@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261106g";
+  const BUILD = "20261106h";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -1804,9 +1804,10 @@
       '<section class="card' + (ui.highlightId === q.id ? " ref-target" : "") + '"' +
       (ui.highlightId === q.id ? ' id="ref-target"' : "") + ' style="margin-top:10px">' +
       '<div class="row between"><span class="tag">' + esc(sectionName(q.section)) + '</span>' +
-      '<span class="muted small">' + (questionLabel(q) ? questionLabel(q) + " · " : "") +
+      '<span class="muted small mono">' + (questionLabel(q) ? questionLabel(q) : "") + '</span></div>' +
+      '<div class="muted small" style="margin:6px 0 10px">' +
       esc(q.source ? q.source + ' · ' : '') +
-      (state.progress[q.id] && (p.attempts || p.reps) ? esc(dateLabel(p.due)) : "not started") + '</span></div>' +
+      (state.progress[q.id] && (p.attempts || p.reps) ? esc(dateLabel(p.due)) : "not started") + '</div>' +
       '<div class="vignette">' + esc(q.vignette) + '</div>' +
       '<div class="options">' + opts + '</div>' +
       (q.why || q.ref
