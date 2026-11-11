@@ -26,7 +26,7 @@
   const LETTERS = ["A", "B", "C", "D", "E"];
   const STORE_KEY = "endo-study-v1";
   const APP_VERSION = 2;
-  const BUILD = "20261106f";
+  const BUILD = "20261106g";
   const MS_DAY = 86400000;
 
   const DEFAULT_SETTINGS = {
@@ -1075,7 +1075,7 @@
     } else if (dLeft >= 0) {
       html += '<div class="hero"><div class="grow"><div class="h3">' + esc(fmtDate(state.settings.examDate)) + '</div>' +
         '<div class="big-num">' + dLeft + '<span>days left</span></div></div>' +
-        '<div class="pill-count">' + streak() + ' day streak</div></div>';
+        '<div class="pill-count">' + (streak() === 1 ? "1-day streak" : streak() + "-day streak") + '</div></div>';
     } else {
       html += '<div class="hero"><div><div class="h3">Exam date passed</div>' +
         '<div class="big-num">' + Math.abs(dLeft) + '<span>days ago</span></div></div></div>';
@@ -1822,7 +1822,7 @@
       '<div class="kv"><span>Accuracy</span><span>' + esc(accTxt) + '</span></div>' +
       '<div class="kv"><span>Repetitions</span><span>' + p.reps + '</span></div>' +
       '<div class="kv"><span>Lapses</span><span>' + p.lapses + '</span></div>' +
-      '<div class="kv"><span>Interval</span><span>' + (p.interval ? p.interval + " days" : "learning") + '</span></div>' +
+      '<div class="kv"><span>Interval</span><span>' + (p.interval ? p.interval + (p.interval === 1 ? " day" : " days") : "learning") + '</span></div>' +
       '<div class="kv"><span>Ease</span><span>' + p.ease.toFixed(2) + '</span></div>' +
       '<div class="kv"><span>Due</span><span>' +
       (p.attempts || p.reps ? esc(fmtDate(p.due)) : "not started") + '</span></div>' +
